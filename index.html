@@ -1,0 +1,886 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier ERP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --bg:#F5F3EE; --surface:#FFFFFF; --surface-2:#EFEBE2; --border:#E0DACB;
+  --fg:#17221E; --fg-muted:#5B6B64; --accent:#0B4A46; --accent-2:#12A79D;
+  --success:#2F7A4F; --success-bg:#E4F2E8; --warning:#A5680B; --warning-bg:#FBEFD9; --danger:#B3261E; --danger-bg:#FAE3E1;
+  --radius:12px; --font-display:'Jost',sans-serif; --font-body:'IBM Plex Sans',sans-serif; --font-mono:'IBM Plex Mono',monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#101613; --surface:#182420; --surface-2:#1F2C27; --border:#2B3A33;
+    --fg:#EDF2EE; --fg-muted:#9BAFA6; --accent:#45C7A6; --accent-2:#2E9684;
+    --success:#6FCB8E; --success-bg:#1C3327; --warning:#E3B35B; --warning-bg:#3A2E15; --danger:#F08A82; --danger-bg:#3A1E1B;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101613; --surface:#182420; --surface-2:#1F2C27; --border:#2B3A33;
+  --fg:#EDF2EE; --fg-muted:#9BAFA6; --accent:#45C7A6; --accent-2:#2E9684;
+  --success:#6FCB8E; --success-bg:#1C3327; --warning:#E3B35B; --warning-bg:#3A2E15; --danger:#F08A82; --danger-bg:#3A1E1B;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.5}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance}
+button{font-family:var(--font-body);cursor:pointer}
+input,select{font-family:var(--font-body);font-size:14px}
+table{font-variant-numeric:tabular-nums}
+a{color:var(--accent)}
+img{max-width:100%}
+
+.app{display:flex;min-height:100%;width:100%}
+.sidebar{width:220px;flex:0 0 220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:20px 12px;gap:4px}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 10px 20px}
+.brand-mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:15px;flex:none}
+.brand-name{font-family:var(--font-display);font-weight:600;font-size:16px}
+.nav-btn{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:none;background:transparent;color:var(--fg-muted);text-align:left;font-size:13.5px;font-weight:500;white-space:nowrap}
+.nav-btn:hover{background:var(--surface-2);color:var(--fg)}
+.nav-btn.active{background:var(--accent);color:#fff}
+.nav-spacer{flex:1}
+.nav-foot{padding:10px 12px;border-top:1px solid var(--border);margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.nav-ent{font-size:12px;color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.logout{background:none;border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--fg-muted);font-size:12.5px}
+.logout:hover{color:var(--danger);border-color:var(--danger)}
+
+.main{flex:1;min-width:0;padding:28px 24px 60px 24px;overflow-x:hidden}
+.view-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.view-head h1{font-size:22px}
+.view-sub{color:var(--fg-muted);font-size:13px;margin-top:2px}
+
+.grid-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:24px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.kpi-label{font-size:12px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.04em}
+.kpi-value{font-family:var(--font-display);font-size:24px;font-weight:600;margin-top:6px}
+.kpi.warn .kpi-value{color:var(--warning)}
+.kpi.bad .kpi-value{color:var(--danger)}
+.kpi.good .kpi-value{color:var(--success)}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:20px}
+.card h3{font-size:15px;margin-bottom:12px}
+.card-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px}
+table{width:100%;border-collapse:collapse;min-width:520px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--border);font-size:13px;white-space:nowrap}
+th{background:var(--surface-2);color:var(--fg-muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;position:sticky;top:0}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface-2)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.empty-row td{color:var(--fg-muted);text-align:center;padding:24px;font-style:italic}
+
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600}
+.pill-ok{background:var(--success-bg);color:var(--success)}
+.pill-warn{background:var(--warning-bg);color:var(--warning)}
+.pill-bad{background:var(--danger-bg);color:var(--danger)}
+.pill-muted{background:var(--surface-2);color:var(--fg-muted)}
+
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:11.5px;color:var(--fg-muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.field input,.field select{padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);width:100%}
+.field input:focus,.field select:focus{outline:2px solid var(--accent-2);outline-offset:-1px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:8px;border:1px solid transparent;font-weight:600;font-size:13px}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-2)}
+.btn-ghost{background:transparent;border-color:var(--border);color:var(--fg)}
+.btn-ghost:hover{background:var(--surface-2)}
+.btn-sm{padding:6px 11px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
+
+.two-pane{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.pane-list{flex:1 1 260px;min-width:240px}
+.pane-detail{flex:2 1 400px;min-width:0}
+.list-item{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:10px 12px;border-radius:8px;border:1px solid var(--border);margin-bottom:6px;background:var(--surface)}
+.list-item.active{border-color:var(--accent);background:var(--surface-2)}
+.list-item button{background:none;border:none;text-align:left;flex:1;min-width:0;font-size:13px;color:var(--fg)}
+.list-item .meta{font-size:11.5px;color:var(--fg-muted)}
+
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.auth-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px 28px}
+.auth-mark{width:44px;height:44px;border-radius:12px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:20px;margin-bottom:16px}
+.auth-card h1{font-size:21px;margin-bottom:4px}
+.auth-card p{color:var(--fg-muted);font-size:13px;margin-bottom:20px}
+.auth-field{margin-bottom:12px;display:flex;flex-direction:column;gap:4px}
+.auth-field label{font-size:12px;font-weight:600;color:var(--fg-muted)}
+.auth-field input{padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)}
+.auth-toggle{margin-top:16px;text-align:center;font-size:13px;color:var(--fg-muted)}
+.auth-toggle button{background:none;border:none;color:var(--accent);font-weight:600;padding:0}
+.auth-error{background:var(--danger-bg);color:var(--danger);padding:8px 10px;border-radius:8px;font-size:12.5px;margin-bottom:12px}
+.auth-msg{background:var(--success-bg);color:var(--success);padding:8px 10px;border-radius:8px;font-size:12.5px;margin-bottom:12px}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:13px;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+
+[hidden]{display:none!important}
+
+@media (max-width: 760px){
+  .app{flex-direction:column}
+  .sidebar{width:100%;flex:none;flex-direction:row;align-items:center;overflow-x:auto;padding:10px 12px;border-right:none;border-bottom:1px solid var(--border);gap:6px}
+  .brand{padding:0 8px 0 0}
+  .nav-spacer{display:none}
+  .nav-foot{border-top:none;margin-top:0;flex-direction:row;padding:0}
+  .nav-ent{display:none}
+  .main{padding:20px 16px 60px 16px}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const { createClient } = supabase;
+const sb = createClient(
+  'https://ercjfokzimdtaccfabpd.supabase.co',
+  'sb_publishable_t2se76ex7Tm-Gj9JPz1FdA_pdbCndDi'
+);
+
+const root = document.getElementById('root');
+const toastEl = document.getElementById('toast');
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastEl._t);
+  toastEl._t = setTimeout(()=>toastEl.classList.remove('show'), 2400);
+}
+function money(n){ n = Number(n||0); return n.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
+function num(n, d){ d = d===undefined?2:d; return Number(n||0).toLocaleString('fr-FR',{minimumFractionDigits:0,maximumFractionDigits:d}); }
+function esc(s){ return (s===null||s===undefined) ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+
+const state = {
+  session: null,
+  profil: null,
+  entreprise: null,
+  view: 'dashboard',
+  cache: {},
+  selectedDevisId: null,
+};
+
+// ---------- AUTH ----------
+async function initAuth(){
+  const { data } = await sb.auth.getSession();
+  state.session = data.session;
+  if (state.session) await loadProfil();
+  render();
+  sb.auth.onAuthStateChange(async (_evt, session) => {
+    state.session = session;
+    if (session) { await loadProfil(); } else { state.profil = null; state.entreprise = null; }
+    render();
+  });
+}
+
+async function loadProfil(){
+  const { data: profil } = await sb.from('profils').select('*').eq('id', state.session.user.id).maybeSingle();
+  state.profil = profil || null;
+  if (profil){
+    const { data: ent } = await sb.from('entreprises').select('*').eq('id', profil.entreprise_id).maybeSingle();
+    state.entreprise = ent || null;
+  }
+}
+
+function renderAuth(mode){
+  mode = mode || 'login';
+  root.innerHTML = `
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <div class="auth-mark">AE</div>
+        <h1>Atelier ERP</h1>
+        <p>${mode==='login' ? 'Connectez-vous à votre espace entreprise.' : 'Créez votre espace entreprise — devis, heures, stock et rentabilité au même endroit.'}</p>
+        <div id="auth-alert"></div>
+        <form id="auth-form">
+          <div class="auth-field"><label for="auth-email">Email</label><input id="auth-email" type="email" required autocomplete="email"></div>
+          <div class="auth-field"><label for="auth-password">Mot de passe</label><input id="auth-password" type="password" required minlength="6" autocomplete="${mode==='login'?'current-password':'new-password'}"></div>
+          ${mode==='signup' ? `
+          <div class="auth-field"><label for="auth-nom">Votre nom</label><input id="auth-nom" type="text" required></div>
+          <div class="auth-field"><label for="auth-entreprise">Nom de l'entreprise</label><input id="auth-entreprise" type="text" required></div>
+          <div class="auth-field"><label for="auth-secteur">Métier / secteur</label><input id="auth-secteur" type="text" placeholder="ex. menuiserie, composite, électricité"></div>
+          ` : ''}
+          <button class="btn btn-primary" type="submit" style="width:100%;margin-top:6px" id="auth-submit">${mode==='login' ? 'Se connecter' : 'Créer mon espace'}</button>
+        </form>
+        <div class="auth-toggle">
+          ${mode==='login'
+            ? `Pas encore de compte ? <button id="auth-switch">Créer un espace</button>`
+            : `Déjà un compte ? <button id="auth-switch">Se connecter</button>`}
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('auth-switch').onclick = () => renderAuth(mode==='login' ? 'signup' : 'login');
+  document.getElementById('auth-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const btn = document.getElementById('auth-submit');
+    const alertBox = document.getElementById('auth-alert');
+    alertBox.innerHTML = '';
+    btn.disabled = true;
+    try {
+      if (mode === 'login'){
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      } else {
+        const nom = document.getElementById('auth-nom').value.trim();
+        const entNom = document.getElementById('auth-entreprise').value.trim();
+        const secteur = document.getElementById('auth-secteur').value.trim();
+        const { data: signData, error } = await sb.auth.signUp({ email, password });
+        if (error) throw error;
+        if (!signData.session){
+          alertBox.innerHTML = `<div class="auth-msg">Compte créé. Si la confirmation par email est activée, vérifiez votre boîte mail avant de vous connecter.</div>`;
+          btn.disabled = false;
+          return;
+        }
+        state.session = signData.session;
+        const { error: rpcErr } = await sb.rpc('creer_entreprise_et_profil', { p_nom: entNom, p_secteur: secteur });
+        if (rpcErr) throw rpcErr;
+        await loadProfil();
+        await sb.from('profils').update({ nom }).eq('id', state.session.user.id);
+        render();
+        return;
+      }
+    } catch (err){
+      alertBox.innerHTML = `<div class="auth-error">${esc(err.message || 'Une erreur est survenue.')}</div>`;
+      btn.disabled = false;
+    }
+  };
+}
+
+function renderOnboarding(){
+  root.innerHTML = `
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <div class="auth-mark">AE</div>
+        <h1>Dernière étape</h1>
+        <p>Votre compte existe mais n'est rattaché à aucune entreprise. Créez votre espace.</p>
+        <div id="ob-alert"></div>
+        <form id="ob-form">
+          <div class="auth-field"><label for="ob-nom">Votre nom</label><input id="ob-nom" type="text" required></div>
+          <div class="auth-field"><label for="ob-entreprise">Nom de l'entreprise</label><input id="ob-entreprise" type="text" required></div>
+          <div class="auth-field"><label for="ob-secteur">Métier / secteur</label><input id="ob-secteur" type="text"></div>
+          <button class="btn btn-primary" type="submit" style="width:100%;margin-top:6px">Créer mon espace</button>
+        </form>
+      </div>
+    </div>`;
+  document.getElementById('ob-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const alertBox = document.getElementById('ob-alert');
+    try {
+      const nom = document.getElementById('ob-nom').value.trim();
+      const entNom = document.getElementById('ob-entreprise').value.trim();
+      const secteur = document.getElementById('ob-secteur').value.trim();
+      const { error } = await sb.rpc('creer_entreprise_et_profil', { p_nom: entNom, p_secteur: secteur });
+      if (error) throw error;
+      await loadProfil();
+      await sb.from('profils').update({ nom }).eq('id', state.session.user.id);
+      render();
+    } catch (err){
+      alertBox.innerHTML = `<div class="auth-error">${esc(err.message)}</div>`;
+    }
+  };
+}
+
+// ---------- SHELL ----------
+const NAV = [
+  { id:'dashboard', label:'Dashboard' },
+  { id:'config', label:'Config' },
+  { id:'bibliotheque', label:'Bibliothèque' },
+  { id:'devis', label:'Devis' },
+  { id:'heures', label:'Heures' },
+  { id:'stock', label:'Stock' },
+  { id:'clients', label:'Clients' },
+  { id:'factures', label:'Factures' },
+];
+
+function renderShell(){
+  root.innerHTML = `
+    <div class="app">
+      <nav class="sidebar">
+        <div class="brand"><div class="brand-mark">AE</div><div class="brand-name">Atelier ERP</div></div>
+        ${NAV.map(n => `<button class="nav-btn${state.view===n.id?' active':''}" data-nav="${n.id}">${n.label}</button>`).join('')}
+        <div class="nav-spacer"></div>
+        <div class="nav-foot">
+          <div class="nav-ent">${esc(state.entreprise?.nom || '')}</div>
+          <button class="logout" id="btn-logout">Se déconnecter</button>
+        </div>
+      </nav>
+      <main class="main" id="main"></main>
+    </div>`;
+  root.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { state.view = b.dataset.nav; renderView(); updateNavActive(); });
+  document.getElementById('btn-logout').onclick = async () => { await sb.auth.signOut(); };
+  renderView();
+}
+function updateNavActive(){
+  root.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('active', b.dataset.nav===state.view));
+}
+
+async function renderView(){
+  const main = document.getElementById('main');
+  main.innerHTML = `<div class="view-head"><h1>…</h1></div>`;
+  const fn = { dashboard:viewDashboard, config:viewConfig, bibliotheque:viewBibliotheque, devis:viewDevis, heures:viewHeures, stock:viewStock, clients:viewClients, factures:viewFactures }[state.view];
+  await fn(main);
+}
+
+// ---------- DASHBOARD ----------
+async function viewDashboard(main){
+  const { data: d } = await sb.from('v_dashboard').select('*').eq('entreprise_id', state.entreprise.id).maybeSingle();
+  const { data: rent } = await sb.from('v_rentabilite').select('*').eq('entreprise_id', state.entreprise.id).order('numero_chantier');
+  const row = d || {};
+  main.innerHTML = `
+    <div class="view-head">
+      <div><h1>Dashboard</h1><div class="view-sub">${esc(state.entreprise.nom)} — vue d'ensemble</div></div>
+    </div>
+    <div class="grid-kpi">
+      ${kpi('Chantiers suivis', row.nb_chantiers||0, '', '')}
+      ${kpi('CA total', money(row.ca_total), '', '')}
+      ${kpi('Marge brute totale', money(row.marge_totale), '', (row.marge_totale||0) >= 0 ? 'good':'bad')}
+      ${kpi('Heures réelles', num(row.heures_totales)+' h', '', '')}
+      ${kpi('Chantiers en dépassement', row.chantiers_depassement||0, '', (row.chantiers_depassement||0)>0?'warn':'good')}
+      ${kpi('Stock à commander', row.stock_a_commander||0, '', (row.stock_a_commander||0)>0?'warn':'good')}
+      ${kpi('Total facturé TTC', money(row.total_facture_ttc), '', '')}
+      ${kpi('Encaissé', money(row.total_encaisse), '', 'good')}
+      ${kpi('Factures en retard', money(row.total_en_retard), '', (row.total_en_retard||0)>0?'bad':'good')}
+      ${kpi('Clients actifs', row.nb_clients||0, '', '')}
+    </div>
+    <div class="card">
+      <h3>Rentabilité par chantier</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Chantier</th><th>Client</th><th>Statut</th><th class="num">H. devis</th><th class="num">H. réelles</th><th class="num">Écart</th><th class="num">Marge</th><th class="num">Marge %</th></tr></thead>
+        <tbody>
+          ${(rent&&rent.length) ? rent.map(r => `
+            <tr>
+              <td>${esc(r.numero_chantier)}</td>
+              <td>${esc(r.client_nom||'—')}</td>
+              <td>${statutChantierPill(r.statut)}</td>
+              <td class="num">${num(r.heures_devis)}</td>
+              <td class="num">${num(r.heures_reelles)}</td>
+              <td class="num">${(r.ecart_heures>0?'+':'')+num(r.ecart_heures)}</td>
+              <td class="num">${money(r.marge_brute)}</td>
+              <td class="num">${r.marge_pct!==null ? (r.marge_pct*100).toFixed(1)+'%' : '—'}</td>
+            </tr>`).join('') : emptyRow(8,'Aucun chantier pour le moment.')}
+        </tbody>
+      </table></div>
+    </div>`;
+}
+function kpi(label, value, sub, tone){
+  return `<div class="kpi ${tone||''}"><div class="kpi-label">${esc(label)}</div><div class="kpi-value">${value}</div></div>`;
+}
+function emptyRow(colspan, text){ return `<tr class="empty-row"><td colspan="${colspan}">${esc(text)}</td></tr>`; }
+function statutChantierPill(s){
+  const cls = s==='Termine' ? 'pill-ok' : s==='En cours' ? 'pill-warn' : 'pill-muted';
+  const label = {'Devis envoye':'Devis envoyé','Accepte':'Accepté','En cours':'En cours','Termine':'Terminé'}[s] || (s||'—');
+  return `<span class="pill ${cls}">${esc(label)}</span>`;
+}
+
+// ---------- CONFIG ----------
+async function viewConfig(main){
+  const ent = state.entreprise;
+  const { data: employes } = await sb.from('employes').select('*').eq('entreprise_id', ent.id).order('created_at');
+  const { data: charges } = await sb.from('charges_fixes').select('*').eq('entreprise_id', ent.id).order('poste');
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Config</h1><div class="view-sub">Identité, salariés et charges — tout le reste de l'outil s'appuie dessus.</div></div></div>
+    <div class="card">
+      <h3>Identité de l'entreprise</h3>
+      <form id="form-ent" class="form-grid">
+        <div class="field"><label>Nom</label><input name="nom" value="${esc(ent.nom)}" required></div>
+        <div class="field"><label>Métier / secteur</label><input name="secteur" value="${esc(ent.secteur||'')}"></div>
+        <div class="field"><label>Taux horaire de vente par défaut (€)</label><input name="taux_horaire_defaut" type="number" step="0.5" value="${ent.taux_horaire_defaut}"></div>
+        <div class="field"><label>Taux de TVA (%)</label><input name="taux_tva" type="number" step="0.5" value="${ent.taux_tva}"></div>
+        <div class="field"><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <div class="card-row"><h3 style="margin:0">Salariés</h3></div>
+      <form id="form-employe" class="form-grid" style="margin-bottom:14px">
+        <div class="field"><label>Nom</label><input name="nom" required></div>
+        <div class="field"><label>Taux facturé client (€/h)</label><input name="taux_horaire_facture" type="number" step="0.5" value="${ent.taux_horaire_defaut}" required></div>
+        <div class="field"><label>Coût horaire chargé (€/h)</label><input name="cout_horaire_charge" type="number" step="0.5" required></div>
+        <div class="field"><button class="btn btn-ghost" type="submit">+ Ajouter</button></div>
+      </form>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Nom</th><th class="num">Taux facturé</th><th class="num">Coût chargé</th><th>Actif</th><th></th></tr></thead>
+        <tbody>
+          ${(employes&&employes.length) ? employes.map(e => `
+            <tr>
+              <td>${esc(e.nom)}</td>
+              <td class="num">${money(e.taux_horaire_facture)}</td>
+              <td class="num">${money(e.cout_horaire_charge)}</td>
+              <td>${e.actif ? '<span class="pill pill-ok">Oui</span>' : '<span class="pill pill-muted">Non</span>'}</td>
+              <td><button class="btn btn-ghost btn-sm" data-del-employe="${e.id}">Retirer</button></td>
+            </tr>`).join('') : emptyRow(5,'Aucun salarié — ajoutez au moins le dirigeant lui-même si ses heures doivent être suivies.')}
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>Charges fixes mensuelles</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Poste</th><th class="num">Montant mensuel (€)</th></tr></thead>
+        <tbody>
+          ${(charges&&charges.length) ? charges.map(c => `
+            <tr><td>${esc(c.poste)}</td><td class="num"><input data-charge="${c.id}" type="number" step="10" value="${c.montant_mensuel}" style="width:110px;text-align:right;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg)"></td></tr>
+          `).join('') : emptyRow(2,'Aucune charge enregistrée.')}
+        </tbody>
+      </table></div>
+      <div style="margin-top:10px;font-size:12.5px;color:var(--fg-muted)">Total : <strong>${money((charges||[]).reduce((s,c)=>s+Number(c.montant_mensuel||0),0))}</strong> / mois</div>
+    </div>`;
+
+  document.getElementById('form-ent').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from('entreprises').update({
+      nom: fd.get('nom'), secteur: fd.get('secteur'),
+      taux_horaire_defaut: Number(fd.get('taux_horaire_defaut')), taux_tva: Number(fd.get('taux_tva'))
+    }).eq('id', ent.id);
+    if (error) return toast('Erreur : ' + error.message);
+    await loadProfil(); toast('Entreprise mise à jour.'); renderShell();
+  };
+  document.getElementById('form-employe').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from('employes').insert({
+      entreprise_id: ent.id, nom: fd.get('nom'),
+      taux_horaire_facture: Number(fd.get('taux_horaire_facture')), cout_horaire_charge: Number(fd.get('cout_horaire_charge'))
+    });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Salarié ajouté.'); viewConfig(main);
+  };
+  main.querySelectorAll('[data-del-employe]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.from('employes').update({ actif:false }).eq('id', b.dataset.delEmploye);
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Salarié désactivé.'); viewConfig(main);
+  });
+  main.querySelectorAll('[data-charge]').forEach(inp => inp.onchange = async () => {
+    const { error } = await sb.from('charges_fixes').update({ montant_mensuel: Number(inp.value||0) }).eq('id', inp.dataset.charge);
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Charge mise à jour.');
+  });
+}
+
+// ---------- BIBLIOTHEQUE ----------
+async function fetchBibliotheque(){
+  const { data } = await sb.from('bibliotheque_taches').select('*').eq('entreprise_id', state.entreprise.id).order('code');
+  return data || [];
+}
+async function viewBibliotheque(main){
+  const taches = await fetchBibliotheque();
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Bibliothèque</h1><div class="view-sub">Catalogue des tâches types — le cœur réutilisable d'un chantier à l'autre.</div></div></div>
+    <div class="card">
+      <form id="form-tache" class="form-grid">
+        <div class="field"><label>Code</label><input name="code" required placeholder="T-01"></div>
+        <div class="field"><label>Intitulé</label><input name="intitule" required></div>
+        <div class="field"><label>Catégorie</label><input name="categorie"></div>
+        <div class="field"><label>Temps unitaire (h)</label><input name="temps_unitaire" type="number" step="0.25" required></div>
+        <div class="field"><label>Unité</label><input name="unite" placeholder="pièce, forfait…"></div>
+        <div class="field"><label>Consommable</label><input name="consommable"></div>
+        <div class="field"><label>Qté conso / unité</label><input name="qte_consommable" type="number" step="0.1" value="0"></div>
+        <div class="field"><label>Coût unit. conso (€)</label><input name="cout_unitaire_conso" type="number" step="0.1" value="0"></div>
+        <div class="field"><button class="btn btn-primary" type="submit">+ Ajouter</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table>
+        <thead><tr><th>Code</th><th>Intitulé</th><th>Catégorie</th><th class="num">Temps (h)</th><th>Unité</th><th>Consommable</th><th></th></tr></thead>
+        <tbody>
+          ${taches.length ? taches.map(t => `
+            <tr>
+              <td><span style="font-family:var(--font-mono);font-size:12px">${esc(t.code)}</span></td>
+              <td>${esc(t.intitule)}</td><td>${esc(t.categorie||'—')}</td>
+              <td class="num">${num(t.temps_unitaire)}</td><td>${esc(t.unite||'—')}</td>
+              <td>${t.consommable ? esc(t.consommable) + ' (' + num(t.qte_consommable) + ' × ' + money(t.cout_unitaire_conso) + ')' : '—'}</td>
+              <td><button class="btn btn-ghost btn-sm" data-del-tache="${t.id}">Retirer</button></td>
+            </tr>`).join('') : emptyRow(7,'Aucune tâche — ajoutez les tâches types du métier de ce client.')}
+        </tbody>
+      </table></div>
+    </div>`;
+  document.getElementById('form-tache').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from('bibliotheque_taches').insert({
+      entreprise_id: state.entreprise.id, code: fd.get('code'), intitule: fd.get('intitule'), categorie: fd.get('categorie'),
+      temps_unitaire: Number(fd.get('temps_unitaire')), unite: fd.get('unite'), consommable: fd.get('consommable'),
+      qte_consommable: Number(fd.get('qte_consommable')||0), cout_unitaire_conso: Number(fd.get('cout_unitaire_conso')||0),
+    });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Tâche ajoutée.'); viewBibliotheque(main);
+  };
+  main.querySelectorAll('[data-del-tache]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.from('bibliotheque_taches').delete().eq('id', b.dataset.delTache);
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Tâche retirée.'); viewBibliotheque(main);
+  });
+}
+
+// ---------- DEVIS ----------
+async function viewDevis(main){
+  const [{ data: devisList }, taches, { data: clients }] = await Promise.all([
+    sb.from('devis').select('*').eq('entreprise_id', state.entreprise.id).order('date', { ascending:false }),
+    fetchBibliotheque(),
+    sb.from('clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
+  ]);
+  const list = devisList || [];
+  if (!state.selectedDevisId && list.length) state.selectedDevisId = list[0].id;
+  const selected = list.find(d => d.id === state.selectedDevisId) || null;
+
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Devis</h1><div class="view-sub">Un numéro de chantier par dossier — génère le prix de vente de référence.</div></div></div>
+    <div class="card">
+      <h3>Nouveau devis</h3>
+      <form id="form-devis" class="form-grid">
+        <div class="field"><label>N° chantier</label><input name="numero_chantier" required placeholder="CH-${String(list.length+1).padStart(3,'0')}"></div>
+        <div class="field"><label>Client</label>
+          <select name="client_id" id="devis-client-select">
+            <option value="">— Client ponctuel —</option>
+            ${(clients||[]).map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Ou nom libre</label><input name="client_nom" placeholder="si client non listé"></div>
+        <div class="field"><label>Date</label><input name="date" type="date" value="${todayISO()}"></div>
+        <div class="field"><button class="btn btn-primary" type="submit">Créer</button></div>
+      </form>
+    </div>
+    <div class="two-pane">
+      <div class="pane-list">
+        <h3 style="font-size:13px;margin-bottom:10px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.03em">Dossiers</h3>
+        ${list.length ? list.map(d => `
+          <div class="list-item${d.id===state.selectedDevisId?' active':''}">
+            <button data-select-devis="${d.id}">
+              <div><strong>${esc(d.numero_chantier)}</strong></div>
+              <div class="meta">${esc(d.client_nom||'—')} · ${esc(d.date)}</div>
+            </button>
+          </div>`).join('') : `<div class="meta">Aucun devis.</div>`}
+      </div>
+      <div class="pane-detail" id="devis-detail"></div>
+    </div>`;
+
+  document.getElementById('form-devis').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const clientId = fd.get('client_id') || null;
+    let clientNom = fd.get('client_nom') || null;
+    if (clientId) clientNom = (clients||[]).find(c=>c.id===clientId)?.nom || clientNom;
+    const { data, error } = await sb.from('devis').insert({
+      entreprise_id: state.entreprise.id, numero_chantier: fd.get('numero_chantier'),
+      client_id: clientId, client_nom: clientNom, date: fd.get('date') || todayISO(),
+    }).select().single();
+    if (error) return toast('Erreur : ' + error.message);
+    state.selectedDevisId = data.id;
+    toast('Devis créé.'); viewDevis(main);
+  };
+  main.querySelectorAll('[data-select-devis]').forEach(b => b.onclick = () => { state.selectedDevisId = b.dataset.selectDevis; viewDevis(main); });
+
+  if (selected) await renderDevisDetail(selected, taches);
+}
+
+async function renderDevisDetail(devis, taches){
+  const detail = document.getElementById('devis-detail');
+  const { data: lignes } = await sb.from('devis_lignes').select('*').eq('devis_id', devis.id).order('created_at');
+  const total = (lignes||[]).reduce((s,l)=>s+Number(l.total_ligne||0),0);
+  const statuts = ['Devis envoye','Accepte','En cours','Termine'];
+  const statutLabels = {'Devis envoye':'Devis envoyé','Accepte':'Accepté','En cours':'En cours','Termine':'Terminé'};
+  detail.innerHTML = `
+    <div class="card">
+      <div class="card-row">
+        <h3 style="margin:0">${esc(devis.numero_chantier)} — ${esc(devis.client_nom||'client ponctuel')}</h3>
+        <select id="devis-statut" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)">
+          ${statuts.map(s=>`<option value="${s}" ${s===devis.statut?'selected':''}>${statutLabels[s]}</option>`).join('')}
+        </select>
+      </div>
+      <form id="form-ligne" class="form-grid" style="margin-bottom:14px">
+        <div class="field"><label>Tâche</label>
+          <select name="tache_id" required>
+            <option value="">—</option>
+            ${taches.map(t=>`<option value="${t.id}">${esc(t.code)} — ${esc(t.intitule)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Quantité</label><input name="quantite" type="number" step="0.5" value="1" required></div>
+        <div class="field"><button class="btn btn-ghost" type="submit">+ Ajouter la ligne</button></div>
+      </form>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Tâche</th><th class="num">Qté</th><th class="num">Temps (h)</th><th class="num">Main d'œuvre</th><th class="num">Conso</th><th class="num">Total</th><th></th></tr></thead>
+        <tbody>
+          ${(lignes&&lignes.length) ? lignes.map(l => `
+            <tr>
+              <td>${esc(l.designation||l.code_tache)}</td>
+              <td class="num">${num(l.quantite)}</td>
+              <td class="num">${num(l.temps_total)}</td>
+              <td class="num">${money(l.prix_main_oeuvre)}</td>
+              <td class="num">${money(l.prix_consommables)}</td>
+              <td class="num"><strong>${money(l.total_ligne)}</strong></td>
+              <td><button class="btn btn-ghost btn-sm" data-del-ligne="${l.id}">×</button></td>
+            </tr>`).join('') : emptyRow(7,'Aucune ligne pour ce devis.')}
+        </tbody>
+        <tfoot><tr><td colspan="5" style="text-align:right;font-weight:600">Total devis</td><td class="num" style="font-weight:700">${money(total)}</td><td></td></tr></tfoot>
+      </table></div>
+    </div>`;
+
+  document.getElementById('devis-statut').onchange = async (e) => {
+    const { error } = await sb.from('devis').update({ statut: e.target.value }).eq('id', devis.id);
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Statut mis à jour.');
+  };
+  document.getElementById('form-ligne').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const tache = taches.find(t => t.id === fd.get('tache_id'));
+    if (!tache) return toast('Choisissez une tâche.');
+    const qte = Number(fd.get('quantite')||0);
+    const tempsTotal = qte * Number(tache.temps_unitaire||0);
+    const tauxVente = Number(state.entreprise.taux_horaire_defaut||0);
+    const prixMO = tempsTotal * tauxVente;
+    const prixConso = qte * Number(tache.qte_consommable||0) * Number(tache.cout_unitaire_conso||0);
+    const { error } = await sb.from('devis_lignes').insert({
+      devis_id: devis.id, tache_id: tache.id, code_tache: tache.code, designation: tache.intitule,
+      quantite: qte, temps_unitaire: tache.temps_unitaire, temps_total: tempsTotal,
+      prix_main_oeuvre: prixMO, prix_consommables: prixConso, total_ligne: prixMO + prixConso,
+    });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Ligne ajoutée.'); renderDevisDetail(devis, taches);
+  };
+  detail.querySelectorAll('[data-del-ligne]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.from('devis_lignes').delete().eq('id', b.dataset.delLigne);
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Ligne retirée.'); renderDevisDetail(devis, taches);
+  });
+}
+
+// ---------- HEURES ----------
+async function viewHeures(main){
+  const [{ data: employes }, taches, { data: heuresList }] = await Promise.all([
+    sb.from('employes').select('*').eq('entreprise_id', state.entreprise.id).eq('actif', true).order('nom'),
+    fetchBibliotheque(),
+    sb.from('heures').select('*').eq('entreprise_id', state.entreprise.id).order('date', { ascending:false }).limit(100),
+  ]);
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Heures</h1><div class="view-sub">Pointage réel par salarié / chantier / tâche — coût calculé automatiquement.</div></div></div>
+    <div class="card">
+      <form id="form-heure" class="form-grid">
+        <div class="field"><label>Date</label><input name="date" type="date" value="${todayISO()}" required></div>
+        <div class="field"><label>Salarié</label>
+          <select name="employe_id" required>
+            <option value="">—</option>
+            ${(employes||[]).map(e=>`<option value="${e.id}" data-cout="${e.cout_horaire_charge}">${esc(e.nom)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>N° chantier</label><input name="numero_chantier" required placeholder="CH-001"></div>
+        <div class="field"><label>Tâche</label>
+          <select name="tache_id">
+            <option value="">—</option>
+            ${taches.map(t=>`<option value="${t.id}">${esc(t.code)} — ${esc(t.intitule)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Heures</label><input name="heures" type="number" step="0.25" required></div>
+        <div class="field"><button class="btn btn-primary" type="submit">+ Pointer</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <h3>Derniers pointages</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Salarié</th><th>Chantier</th><th>Tâche</th><th class="num">Heures</th><th class="num">Coût</th><th></th></tr></thead>
+        <tbody>
+          ${(heuresList&&heuresList.length) ? heuresList.map(h => `
+            <tr>
+              <td>${esc(h.date)}</td><td>${esc(h.employe_nom||'—')}</td><td>${esc(h.numero_chantier)}</td>
+              <td>${esc(h.code_tache||'—')}</td><td class="num">${num(h.heures)}</td><td class="num">${money(h.cout_total)}</td>
+              <td><button class="btn btn-ghost btn-sm" data-del-heure="${h.id}">×</button></td>
+            </tr>`).join('') : emptyRow(7,'Aucun pointage.')}
+        </tbody>
+      </table></div>
+    </div>`;
+  document.getElementById('form-heure').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const emp = (employes||[]).find(x=>x.id===fd.get('employe_id'));
+    const tache = taches.find(t=>t.id===fd.get('tache_id'));
+    const heuresVal = Number(fd.get('heures')||0);
+    const coutHoraire = emp ? Number(emp.cout_horaire_charge||0) : 0;
+    const { error } = await sb.from('heures').insert({
+      entreprise_id: state.entreprise.id, date: fd.get('date'), employe_id: emp?.id||null, employe_nom: emp?.nom||null,
+      numero_chantier: fd.get('numero_chantier'), tache_id: tache?.id||null, code_tache: tache?.code||null,
+      heures: heuresVal, cout_horaire: coutHoraire, cout_total: heuresVal*coutHoraire,
+    });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Heures enregistrées.'); viewHeures(main);
+  };
+  main.querySelectorAll('[data-del-heure]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.from('heures').delete().eq('id', b.dataset.delHeure);
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Pointage retiré.'); viewHeures(main);
+  });
+}
+
+// ---------- STOCK ----------
+async function viewStock(main){
+  const { data: stock } = await sb.from('stock').select('*').eq('entreprise_id', state.entreprise.id).order('designation');
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Stock</h1><div class="view-sub">Consommables avec seuil d'alerte.</div></div></div>
+    <div class="card">
+      <form id="form-stock" class="form-grid">
+        <div class="field"><label>Référence</label><input name="reference"></div>
+        <div class="field"><label>Désignation</label><input name="designation" required></div>
+        <div class="field"><label>Catégorie</label><input name="categorie"></div>
+        <div class="field"><label>Quantité</label><input name="quantite" type="number" step="1" value="0" required></div>
+        <div class="field"><label>Seuil d'alerte</label><input name="seuil_alerte" type="number" step="1" value="0" required></div>
+        <div class="field"><label>Unité</label><input name="unite"></div>
+        <div class="field"><label>Coût unitaire (€)</label><input name="cout_unitaire" type="number" step="0.1" value="0"></div>
+        <div class="field"><label>Fournisseur</label><input name="fournisseur"></div>
+        <div class="field"><button class="btn btn-primary" type="submit">+ Ajouter</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table>
+        <thead><tr><th>Référence</th><th>Désignation</th><th>Catégorie</th><th class="num">Qté</th><th class="num">Seuil</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          ${(stock&&stock.length) ? stock.map(s => `
+            <tr>
+              <td>${esc(s.reference||'—')}</td><td>${esc(s.designation)}</td><td>${esc(s.categorie||'—')}</td>
+              <td class="num">${num(s.quantite)}</td><td class="num">${num(s.seuil_alerte)}</td>
+              <td>${Number(s.quantite) <= Number(s.seuil_alerte) ? '<span class="pill pill-bad">À commander</span>' : '<span class="pill pill-ok">OK</span>'}</td>
+              <td><button class="btn btn-ghost btn-sm" data-del-stock="${s.id}">Retirer</button></td>
+            </tr>`).join('') : emptyRow(7,'Aucun article en stock.')}
+        </tbody>
+      </table></div>
+    </div>`;
+  document.getElementById('form-stock').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from('stock').insert({
+      entreprise_id: state.entreprise.id, reference: fd.get('reference'), designation: fd.get('designation'),
+      categorie: fd.get('categorie'), quantite: Number(fd.get('quantite')), seuil_alerte: Number(fd.get('seuil_alerte')),
+      unite: fd.get('unite'), cout_unitaire: Number(fd.get('cout_unitaire')||0), fournisseur: fd.get('fournisseur'),
+    });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Article ajouté.'); viewStock(main);
+  };
+  main.querySelectorAll('[data-del-stock]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.from('stock').delete().eq('id', b.dataset.delStock);
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Article retiré.'); viewStock(main);
+  });
+}
+
+// ---------- CLIENTS ----------
+async function viewClients(main){
+  const { data: clients } = await sb.from('v_clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom');
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Clients</h1><div class="view-sub">CA total et nombre de devis calculés automatiquement.</div></div></div>
+    <div class="card">
+      <form id="form-client" class="form-grid">
+        <div class="field"><label>Nom</label><input name="nom" required></div>
+        <div class="field"><label>Contact</label><input name="contact"></div>
+        <div class="field"><label>Téléphone</label><input name="telephone"></div>
+        <div class="field"><label>Email</label><input name="email" type="email"></div>
+        <div class="field"><label>Adresse</label><input name="adresse"></div>
+        <div class="field"><button class="btn btn-primary" type="submit">+ Ajouter</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table>
+        <thead><tr><th>Nom</th><th>Contact</th><th>Téléphone</th><th class="num">CA total</th><th class="num">Nb devis</th><th>Dernier devis</th></tr></thead>
+        <tbody>
+          ${(clients&&clients.length) ? clients.map(c => `
+            <tr>
+              <td>${esc(c.nom)}</td><td>${esc(c.contact||'—')}</td><td>${esc(c.telephone||'—')}</td>
+              <td class="num">${money(c.ca_total)}</td><td class="num">${c.nb_devis||0}</td><td>${esc(c.dernier_devis||'—')}</td>
+            </tr>`).join('') : emptyRow(6,'Aucun client enregistré.')}
+        </tbody>
+      </table></div>
+    </div>`;
+  document.getElementById('form-client').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from('clients').insert({
+      entreprise_id: state.entreprise.id, nom: fd.get('nom'), contact: fd.get('contact'),
+      telephone: fd.get('telephone'), email: fd.get('email'), adresse: fd.get('adresse'),
+    });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Client ajouté.'); viewClients(main);
+  };
+}
+
+// ---------- FACTURES ----------
+async function viewFactures(main){
+  const [{ data: factures }, { data: clients }] = await Promise.all([
+    sb.from('v_factures').select('*').eq('entreprise_id', state.entreprise.id).order('date_emission', { ascending:false }),
+    sb.from('clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
+  ]);
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Factures</h1><div class="view-sub">Suivi séparé du devis — acompte/solde, échéance, statut automatique.</div></div></div>
+    <div class="card">
+      <form id="form-facture" class="form-grid">
+        <div class="field"><label>N° facture</label><input name="numero_facture" required></div>
+        <div class="field"><label>N° chantier</label><input name="numero_chantier"></div>
+        <div class="field"><label>Client</label>
+          <select name="client_id"><option value="">— Client ponctuel —</option>${(clients||[]).map(c=>`<option value="${c.id}">${esc(c.nom)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Type</label>
+          <select name="type"><option>Facture unique</option><option>Acompte</option><option>Solde</option></select>
+        </div>
+        <div class="field"><label>Date émission</label><input name="date_emission" type="date" value="${todayISO()}"></div>
+        <div class="field"><label>Date échéance</label><input name="date_echeance" type="date"></div>
+        <div class="field"><label>Montant HT (€)</label><input name="montant_ht" type="number" step="0.5" required></div>
+        <div class="field"><button class="btn btn-primary" type="submit">+ Émettre</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table>
+        <thead><tr><th>N°</th><th>Chantier</th><th>Client</th><th>Type</th><th>Échéance</th><th class="num">TTC</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          ${(factures&&factures.length) ? factures.map(f => `
+            <tr>
+              <td>${esc(f.numero_facture)}</td><td>${esc(f.numero_chantier||'—')}</td><td>${esc(f.client_nom||'—')}</td>
+              <td>${esc(f.type)}</td><td>${esc(f.date_echeance||'—')}</td><td class="num">${money(f.montant_ttc)}</td>
+              <td>${factureStatutPill(f.statut)}</td>
+              <td>${f.statut!=='Payee' ? `<button class="btn btn-ghost btn-sm" data-pay-facture="${f.id}">Marquer payée</button>` : ''}</td>
+            </tr>`).join('') : emptyRow(8,'Aucune facture émise.')}
+        </tbody>
+      </table></div>
+    </div>`;
+  document.getElementById('form-facture').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const ht = Number(fd.get('montant_ht')||0);
+    const tva = ht * Number(state.entreprise.taux_tva||0) / 100;
+    const clientId = fd.get('client_id') || null;
+    const clientNom = clientId ? (clients||[]).find(c=>c.id===clientId)?.nom : null;
+    const { error } = await sb.from('factures').insert({
+      entreprise_id: state.entreprise.id, numero_facture: fd.get('numero_facture'), numero_chantier: fd.get('numero_chantier'),
+      client_id: clientId, client_nom: clientNom, type: fd.get('type'),
+      date_emission: fd.get('date_emission')||todayISO(), date_echeance: fd.get('date_echeance')||null,
+      montant_ht: ht, tva, montant_ttc: ht+tva,
+    });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Facture émise.'); viewFactures(main);
+  };
+  main.querySelectorAll('[data-pay-facture]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.from('factures').update({ date_paiement: todayISO() }).eq('id', b.dataset.payFacture);
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Facture marquée payée.'); viewFactures(main);
+  });
+}
+function factureStatutPill(s){
+  const map = { 'Payee':['pill-ok','Payée'], 'En retard':['pill-bad','En retard'], 'En attente':['pill-warn','En attente'] };
+  const [cls,label] = map[s] || ['pill-muted', s];
+  return `<span class="pill ${cls}">${esc(label)}</span>`;
+}
+
+// ---------- ROOT RENDER ----------
+function render(){
+  if (!state.session){ renderAuth('login'); return; }
+  if (!state.profil){ renderOnboarding(); return; }
+  renderShell();
+}
+
+initAuth();
+</script>
+</body>
+</html>
