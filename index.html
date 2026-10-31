@@ -1173,7 +1173,7 @@ async function viewPlanning(main){
     const { error } = await sb.from('interventions').insert({
       entreprise_id: state.entreprise.id, titre: fd.get('titre'), numero_chantier: fd.get('numero_chantier')||null,
       employe_id: emp?.id||null, employe_nom: emp?.nom||null,
-      date_debut: fd.get('date_debut'), date_fin: fd.get('date_fin')||fd.get('date_debut'),
+      date_debut: new Date(fd.get('date_debut')).toISOString(), date_fin: new Date(fd.get('date_fin')||fd.get('date_debut')).toISOString(),
     });
     if (error) return toast('Erreur : ' + error.message);
     toast('Intervention planifiée.'); viewPlanning(main);
