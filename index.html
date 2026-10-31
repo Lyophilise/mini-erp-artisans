@@ -158,6 +158,16 @@ function money(n){ n = Number(n||0); return n.toLocaleString('fr-FR',{minimumFra
 function num(n, d){ d = d===undefined?2:d; return Number(n||0).toLocaleString('fr-FR',{minimumFractionDigits:0,maximumFractionDigits:d}); }
 function esc(s){ return (s===null||s===undefined) ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
+function nowLocalInput(){ const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,16); }
+function dt(s){ if(!s) return '—'; const d=new Date(s); return d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+function joursRestants(dateStr){ if(!dateStr) return null; const diff = (new Date(dateStr) - new Date(todayISO())) / 86400000; return Math.round(diff); }
+function echeancePill(dateStr, label){
+  if (!dateStr) return '<span class="pill pill-muted">—</span>';
+  const j = joursRestants(dateStr);
+  const cls = j < 0 ? 'pill-bad' : j <= 30 ? 'pill-warn' : 'pill-ok';
+  const txt = j < 0 ? `${label||''} dépassée` : `${label||''} dans ${j} j`;
+  return `<span class="pill ${cls}">${esc(txt.trim())}</span>`;
+}
 
 const state = {
   session: null,
@@ -166,6 +176,8 @@ const state = {
   view: 'dashboard',
   cache: {},
   selectedDevisId: null,
+  selectedFactureId: null,
+  selectedCommandeId: null,
 };
 
 // ---------- AUTH ----------
@@ -293,12 +305,17 @@ function renderOnboarding(){
 const NAV = [
   { id:'dashboard', label:'Dashboard' },
   { id:'config', label:'Config' },
+  { id:'planning', label:'Planning' },
   { id:'bibliotheque', label:'Bibliothèque' },
   { id:'devis', label:'Devis' },
   { id:'heures', label:'Heures' },
   { id:'stock', label:'Stock' },
+  { id:'achats', label:'Achats' },
+  { id:'materiel', label:'Matériel' },
   { id:'clients', label:'Clients' },
   { id:'factures', label:'Factures' },
+  { id:'rh', label:'RH' },
+  { id:'soustraitance', label:'Sous-traitance' },
 ];
 
 function renderShell(){
@@ -326,15 +343,23 @@ function updateNavActive(){
 async function renderView(){
   const main = document.getElementById('main');
   main.innerHTML = `<div class="view-head"><h1>…</h1></div>`;
-  const fn = { dashboard:viewDashboard, config:viewConfig, bibliotheque:viewBibliotheque, devis:viewDevis, heures:viewHeures, stock:viewStock, clients:viewClients, factures:viewFactures }[state.view];
+  const fn = { dashboard:viewDashboard, config:viewConfig, planning:viewPlanning, bibliotheque:viewBibliotheque, devis:viewDevis, heures:viewHeures, stock:viewStock, achats:viewAchats, materiel:viewMateriel, clients:viewClients, factures:viewFactures, rh:viewRH, soustraitance:viewSousTraitance }[state.view];
   await fn(main);
 }
 
 // ---------- DASHBOARD ----------
 async function viewDashboard(main){
-  const { data: d } = await sb.from('v_dashboard').select('*').eq('entreprise_id', state.entreprise.id).maybeSingle();
-  const { data: rent } = await sb.from('v_rentabilite').select('*').eq('entreprise_id', state.entreprise.id).order('numero_chantier');
+  const [{ data: d }, { data: rent }, { data: alertesMateriel }, { data: alertesHabilitations }] = await Promise.all([
+    sb.from('v_dashboard').select('*').eq('entreprise_id', state.entreprise.id).maybeSingle(),
+    sb.from('v_rentabilite').select('*').eq('entreprise_id', state.entreprise.id).order('numero_chantier'),
+    sb.from('v_alertes_materiel').select('*').eq('entreprise_id', state.entreprise.id),
+    sb.from('v_alertes_habilitations').select('*').eq('entreprise_id', state.entreprise.id),
+  ]);
   const row = d || {};
+  const alertes = [
+    ...(alertesMateriel||[]).map(m => ({ label: `${m.nom} — ${m.date_prochain_controle && joursRestants(m.date_prochain_controle)<=30 ? 'contrôle' : 'assurance'}`, date: m.date_prochain_controle || m.date_prochaine_assurance })),
+    ...(alertesHabilitations||[]).map(h => ({ label: `${h.employe_nom||'—'} — ${h.intitule}`, date: h.date_expiration })),
+  ].sort((a,b) => new Date(a.date) - new Date(b.date));
   main.innerHTML = `
     <div class="view-head">
       <div><h1>Dashboard</h1><div class="view-sub">${esc(state.entreprise.nom)} — vue d'ensemble</div></div>
@@ -350,7 +375,20 @@ async function viewDashboard(main){
       ${kpi('Encaissé', money(row.total_encaisse), '', 'good')}
       ${kpi('Factures en retard', money(row.total_en_retard), '', (row.total_en_retard||0)>0?'bad':'good')}
       ${kpi('Clients actifs', row.nb_clients||0, '', '')}
+      ${kpi('Interventions (14j)', row.interventions_7j||0, '', '')}
+      ${kpi('Alertes matériel/véhicule', row.materiel_alertes||0, '', (row.materiel_alertes||0)>0?'warn':'good')}
+      ${kpi('Habilitations à renouveler', row.habilitations_alertes||0, '', (row.habilitations_alertes||0)>0?'warn':'good')}
+      ${kpi('Commandes en attente', row.commandes_en_attente||0, '', (row.commandes_en_attente||0)>0?'warn':'good')}
+      ${kpi('Sous-traitance à payer', money(row.sous_traitance_a_payer), '', (row.sous_traitance_a_payer||0)>0?'warn':'good')}
     </div>
+    ${alertes.length ? `
+    <div class="card">
+      <h3>Alertes échéances (30 jours)</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Élément</th><th>Échéance</th></tr></thead>
+        <tbody>${alertes.map(a => `<tr><td>${esc(a.label)}</td><td>${echeancePill(a.date)}</td></tr>`).join('')}</tbody>
+      </table></div>
+    </div>` : ''}
     <div class="card">
       <h3>Rentabilité par chantier</h3>
       <div class="table-wrap"><table>
@@ -394,9 +432,35 @@ async function viewConfig(main){
         <div class="field"><label>Nom</label><input name="nom" value="${esc(ent.nom)}" required></div>
         <div class="field"><label>Métier / secteur</label><input name="secteur" value="${esc(ent.secteur||'')}"></div>
         <div class="field"><label>Taux horaire de vente par défaut (€)</label><input name="taux_horaire_defaut" type="number" step="0.5" value="${ent.taux_horaire_defaut}"></div>
-        <div class="field"><label>Taux de TVA (%)</label><input name="taux_tva" type="number" step="0.5" value="${ent.taux_tva}"></div>
+        <div class="field"><label>Taux de TVA par défaut (%)</label><input name="taux_tva" type="number" step="0.5" value="${ent.taux_tva}"></div>
         <div class="field"><button class="btn btn-primary" type="submit">Enregistrer</button></div>
       </form>
+    </div>
+    <div class="card">
+      <h3>Mentions légales (devis / factures)</h3>
+      <div class="view-sub" style="margin-bottom:12px">Obligatoires sur tout devis/facture BTP — assurance décennale, RC pro, SIRET, coordonnées bancaires.</div>
+      <form id="form-legal" class="form-grid">
+        <div class="field"><label>SIRET</label><input name="siret" value="${esc(ent.siret||'')}"></div>
+        <div class="field"><label>Forme juridique</label><input name="forme_juridique" value="${esc(ent.forme_juridique||'')}" placeholder="EI, SASU, SARL…"></div>
+        <div class="field"><label>N° TVA intracom.</label><input name="tva_intracom" value="${esc(ent.tva_intracom||'')}"></div>
+        <div class="field" style="grid-column:1/-1"><label>Adresse</label><input name="adresse" value="${esc(ent.adresse||'')}"></div>
+        <div class="field"><label>Assureur décennale</label><input name="assurance_decennale_assureur" value="${esc(ent.assurance_decennale_assureur||'')}"></div>
+        <div class="field"><label>N° attestation décennale</label><input name="assurance_decennale_attestation" value="${esc(ent.assurance_decennale_attestation||'')}"></div>
+        <div class="field"><label>Décennale valide jusqu'au</label><input name="assurance_decennale_validite" type="date" value="${ent.assurance_decennale_validite||''}"></div>
+        <div class="field"><label>Assureur RC Pro</label><input name="rc_pro_assureur" value="${esc(ent.rc_pro_assureur||'')}"></div>
+        <div class="field"><label>RC Pro valide jusqu'au</label><input name="rc_pro_validite" type="date" value="${ent.rc_pro_validite||''}"></div>
+        <div class="field"><label>IBAN</label><input name="iban" value="${esc(ent.iban||'')}"></div>
+        <div class="field"><label>BIC</label><input name="bic" value="${esc(ent.bic||'')}"></div>
+        <div class="field"><label>Conditions de paiement</label><input name="conditions_paiement" value="${esc(ent.conditions_paiement||'')}"></div>
+        <div class="field" style="grid-column:1/-1"><label>Pied de page légal (texte libre, imprimé sur devis/factures)</label><input name="pied_page_legal" value="${esc(ent.pied_page_legal||'')}"></div>
+        <div class="field"><button class="btn btn-primary" type="submit">Enregistrer les mentions légales</button></div>
+      </form>
+      ${(() => {
+        const alerts = [];
+        if (ent.assurance_decennale_validite) alerts.push(echeancePill(ent.assurance_decennale_validite, 'Décennale'));
+        if (ent.rc_pro_validite) alerts.push(echeancePill(ent.rc_pro_validite, 'RC Pro'));
+        return alerts.length ? `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${alerts.join('')}</div>` : '';
+      })()}
     </div>
     <div class="card">
       <div class="card-row"><h3 style="margin:0">Salariés</h3></div>
@@ -442,6 +506,16 @@ async function viewConfig(main){
     }).eq('id', ent.id);
     if (error) return toast('Erreur : ' + error.message);
     await loadProfil(); toast('Entreprise mise à jour.'); renderShell();
+  };
+  document.getElementById('form-legal').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const payload = {};
+    ['siret','forme_juridique','tva_intracom','adresse','assurance_decennale_assureur','assurance_decennale_attestation','rc_pro_assureur','iban','bic','conditions_paiement','pied_page_legal'].forEach(k => payload[k] = fd.get(k) || null);
+    ['assurance_decennale_validite','rc_pro_validite'].forEach(k => payload[k] = fd.get(k) || null);
+    const { error } = await sb.from('entreprises').update(payload).eq('id', ent.id);
+    if (error) return toast('Erreur : ' + error.message);
+    await loadProfil(); toast('Mentions légales enregistrées.'); viewConfig(main);
   };
   document.getElementById('form-employe').onsubmit = async (e) => {
     e.preventDefault();
@@ -545,6 +619,8 @@ async function viewDevis(main){
         </div>
         <div class="field"><label>Ou nom libre</label><input name="client_nom" placeholder="si client non listé"></div>
         <div class="field"><label>Date</label><input name="date" type="date" value="${todayISO()}"></div>
+        <div class="field"><label>TVA (%)</label><input name="taux_tva" type="number" step="0.5" value="${state.entreprise.taux_tva}"></div>
+        <div class="field"><label>Validité (jours)</label><input name="validite_jours" type="number" step="1" value="30"></div>
         <div class="field"><button class="btn btn-primary" type="submit">Créer</button></div>
       </form>
     </div>
@@ -554,8 +630,8 @@ async function viewDevis(main){
         ${list.length ? list.map(d => `
           <div class="list-item${d.id===state.selectedDevisId?' active':''}">
             <button data-select-devis="${d.id}">
-              <div><strong>${esc(d.numero_chantier)}</strong></div>
-              <div class="meta">${esc(d.client_nom||'—')} · ${esc(d.date)}</div>
+              <div><strong>${esc(d.numero||d.numero_chantier)}</strong></div>
+              <div class="meta">${esc(d.numero_chantier)} · ${esc(d.client_nom||'—')} · ${esc(d.date)}</div>
             </button>
           </div>`).join('') : `<div class="meta">Aucun devis.</div>`}
       </div>
@@ -568,9 +644,12 @@ async function viewDevis(main){
     const clientId = fd.get('client_id') || null;
     let clientNom = fd.get('client_nom') || null;
     if (clientId) clientNom = (clients||[]).find(c=>c.id===clientId)?.nom || clientNom;
+    const { data: numero, error: numErr } = await sb.rpc('prochain_numero', { p_entreprise_id: state.entreprise.id, p_type: 'devis', p_prefixe: 'DE' });
+    if (numErr) return toast('Erreur numérotation : ' + numErr.message);
     const { data, error } = await sb.from('devis').insert({
-      entreprise_id: state.entreprise.id, numero_chantier: fd.get('numero_chantier'),
+      entreprise_id: state.entreprise.id, numero, numero_chantier: fd.get('numero_chantier'),
       client_id: clientId, client_nom: clientNom, date: fd.get('date') || todayISO(),
+      taux_tva: Number(fd.get('taux_tva')||20), validite_jours: Number(fd.get('validite_jours')||30),
     }).select().single();
     if (error) return toast('Erreur : ' + error.message);
     state.selectedDevisId = data.id;
@@ -584,16 +663,27 @@ async function viewDevis(main){
 async function renderDevisDetail(devis, taches){
   const detail = document.getElementById('devis-detail');
   const { data: lignes } = await sb.from('devis_lignes').select('*').eq('devis_id', devis.id).order('created_at');
-  const total = (lignes||[]).reduce((s,l)=>s+Number(l.total_ligne||0),0);
+  const totalHT = (lignes||[]).reduce((s,l)=>s+Number(l.total_ligne||0),0);
+  const tauxTva = Number(devis.taux_tva||0);
+  const totalTVA = totalHT * tauxTva / 100;
+  const totalTTC = totalHT + totalTVA;
+  const acomptePct = Number(devis.acompte_demande_pct||0);
+  const montantAcompte = totalTTC * acomptePct / 100;
   const statuts = ['Devis envoye','Accepte','En cours','Termine'];
   const statutLabels = {'Devis envoye':'Devis envoyé','Accepte':'Accepté','En cours':'En cours','Termine':'Terminé'};
   detail.innerHTML = `
     <div class="card">
       <div class="card-row">
-        <h3 style="margin:0">${esc(devis.numero_chantier)} — ${esc(devis.client_nom||'client ponctuel')}</h3>
+        <h3 style="margin:0">${esc(devis.numero||devis.numero_chantier)} — ${esc(devis.client_nom||'client ponctuel')} <span style="color:var(--fg-muted);font-weight:400;font-size:13px">(chantier ${esc(devis.numero_chantier)})</span></h3>
         <select id="devis-statut" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)">
           ${statuts.map(s=>`<option value="${s}" ${s===devis.statut?'selected':''}>${statutLabels[s]}</option>`).join('')}
         </select>
+      </div>
+      <div class="form-grid" style="margin-bottom:14px">
+        <div class="field"><label>TVA (%)</label><input id="devis-tva" type="number" step="0.5" value="${tauxTva}"></div>
+        <div class="field"><label>Acompte demandé (%)</label><input id="devis-acompte" type="number" step="5" value="${acomptePct}"></div>
+        <div class="field"><label>Validité (jours)</label><input id="devis-validite" type="number" step="1" value="${devis.validite_jours||30}"></div>
+        <div class="field"><button class="btn btn-ghost" id="devis-save-cond" type="button">Mettre à jour</button></div>
       </div>
       <form id="form-ligne" class="form-grid" style="margin-bottom:14px">
         <div class="field"><label>Tâche</label>
@@ -619,7 +709,12 @@ async function renderDevisDetail(devis, taches){
               <td><button class="btn btn-ghost btn-sm" data-del-ligne="${l.id}">×</button></td>
             </tr>`).join('') : emptyRow(7,'Aucune ligne pour ce devis.')}
         </tbody>
-        <tfoot><tr><td colspan="5" style="text-align:right;font-weight:600">Total devis</td><td class="num" style="font-weight:700">${money(total)}</td><td></td></tr></tfoot>
+        <tfoot>
+          <tr><td colspan="5" style="text-align:right;font-weight:600">Total HT</td><td class="num" style="font-weight:700">${money(totalHT)}</td><td></td></tr>
+          <tr><td colspan="5" style="text-align:right;color:var(--fg-muted)">TVA (${num(tauxTva,1)}%)</td><td class="num">${money(totalTVA)}</td><td></td></tr>
+          <tr><td colspan="5" style="text-align:right;font-weight:700">Total TTC</td><td class="num" style="font-weight:700">${money(totalTTC)}</td><td></td></tr>
+          ${acomptePct>0 ? `<tr><td colspan="5" style="text-align:right;color:var(--accent)">Acompte demandé (${num(acomptePct,0)}%)</td><td class="num" style="color:var(--accent)">${money(montantAcompte)}</td><td></td></tr>` : ''}
+        </tfoot>
       </table></div>
     </div>`;
 
@@ -627,6 +722,17 @@ async function renderDevisDetail(devis, taches){
     const { error } = await sb.from('devis').update({ statut: e.target.value }).eq('id', devis.id);
     if (error) return toast('Erreur : ' + error.message);
     toast('Statut mis à jour.');
+  };
+  document.getElementById('devis-save-cond').onclick = async () => {
+    const { error } = await sb.from('devis').update({
+      taux_tva: Number(document.getElementById('devis-tva').value||0),
+      acompte_demande_pct: Number(document.getElementById('devis-acompte').value||0),
+      validite_jours: Number(document.getElementById('devis-validite').value||30),
+    }).eq('id', devis.id);
+    if (error) return toast('Erreur : ' + error.message);
+    devis.taux_tva = Number(document.getElementById('devis-tva').value||0);
+    devis.acompte_demande_pct = Number(document.getElementById('devis-acompte').value||0);
+    toast('Conditions mises à jour.'); renderDevisDetail(devis, taches);
   };
   document.getElementById('form-ligne').onsubmit = async (e) => {
     e.preventDefault();
@@ -809,68 +915,588 @@ async function viewClients(main){
 
 // ---------- FACTURES ----------
 async function viewFactures(main){
-  const [{ data: factures }, { data: clients }] = await Promise.all([
+  const [{ data: factures }, { data: clients }, { data: devisList }] = await Promise.all([
     sb.from('v_factures').select('*').eq('entreprise_id', state.entreprise.id).order('date_emission', { ascending:false }),
     sb.from('clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
+    sb.from('devis').select('*').eq('entreprise_id', state.entreprise.id).order('date', { ascending:false }),
   ]);
+  const list = factures || [];
+  if (!state.selectedFactureId && list.length) state.selectedFactureId = list[0].id;
+  const selected = list.find(f => f.id === state.selectedFactureId) || null;
+
   main.innerHTML = `
-    <div class="view-head"><div><h1>Factures</h1><div class="view-sub">Suivi séparé du devis — acompte/solde, échéance, statut automatique.</div></div></div>
+    <div class="view-head"><div><h1>Factures</h1><div class="view-sub">Numérotation légale séquentielle, lignes détaillées, acompte/solde, avoirs.</div></div></div>
     <div class="card">
+      <h3>Nouvelle facture</h3>
       <form id="form-facture" class="form-grid">
-        <div class="field"><label>N° facture</label><input name="numero_facture" required></div>
-        <div class="field"><label>N° chantier</label><input name="numero_chantier"></div>
-        <div class="field"><label>Client</label>
-          <select name="client_id"><option value="">— Client ponctuel —</option>${(clients||[]).map(c=>`<option value="${c.id}">${esc(c.nom)}</option>`).join('')}</select>
+        <div class="field"><label>Depuis un devis (optionnel)</label>
+          <select name="devis_id" id="facture-devis-select">
+            <option value="">— Facture manuelle —</option>
+            ${(devisList||[]).map(d => `<option value="${d.id}">${esc(d.numero||d.numero_chantier)} — ${esc(d.client_nom||'—')}</option>`).join('')}
+          </select>
         </div>
         <div class="field"><label>Type</label>
           <select name="type"><option>Facture unique</option><option>Acompte</option><option>Solde</option></select>
         </div>
+        <div class="field" id="facture-pct-field" hidden><label>% du devis (acompte)</label><input name="pct_acompte" type="number" step="5" value="30"></div>
+        <div class="field"><label>Client (si manuelle)</label>
+          <select name="client_id"><option value="">— Client ponctuel —</option>${(clients||[]).map(c=>`<option value="${c.id}">${esc(c.nom)}</option>`).join('')}</select>
+        </div>
         <div class="field"><label>Date émission</label><input name="date_emission" type="date" value="${todayISO()}"></div>
         <div class="field"><label>Date échéance</label><input name="date_echeance" type="date"></div>
-        <div class="field"><label>Montant HT (€)</label><input name="montant_ht" type="number" step="0.5" required></div>
         <div class="field"><button class="btn btn-primary" type="submit">+ Émettre</button></div>
       </form>
     </div>
-    <div class="card">
-      <div class="table-wrap"><table>
-        <thead><tr><th>N°</th><th>Chantier</th><th>Client</th><th>Type</th><th>Échéance</th><th class="num">TTC</th><th>Statut</th><th></th></tr></thead>
-        <tbody>
-          ${(factures&&factures.length) ? factures.map(f => `
-            <tr>
-              <td>${esc(f.numero_facture)}</td><td>${esc(f.numero_chantier||'—')}</td><td>${esc(f.client_nom||'—')}</td>
-              <td>${esc(f.type)}</td><td>${esc(f.date_echeance||'—')}</td><td class="num">${money(f.montant_ttc)}</td>
-              <td>${factureStatutPill(f.statut)}</td>
-              <td>${f.statut!=='Payee' ? `<button class="btn btn-ghost btn-sm" data-pay-facture="${f.id}">Marquer payée</button>` : ''}</td>
-            </tr>`).join('') : emptyRow(8,'Aucune facture émise.')}
-        </tbody>
-      </table></div>
+    <div class="two-pane">
+      <div class="pane-list">
+        <h3 style="font-size:13px;margin-bottom:10px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.03em">Factures</h3>
+        ${list.length ? list.map(f => `
+          <div class="list-item${f.id===state.selectedFactureId?' active':''}">
+            <button data-select-facture="${f.id}">
+              <div><strong>${esc(f.numero_facture)}</strong> ${f.type==='Avoir'?'<span class="pill pill-bad">Avoir</span>':''}</div>
+              <div class="meta">${esc(f.client_nom||'—')} · ${money(f.montant_ttc)} · ${factureStatutPill(f.statut)}</div>
+            </button>
+          </div>`).join('') : `<div class="meta">Aucune facture.</div>`}
+      </div>
+      <div class="pane-detail" id="facture-detail"></div>
     </div>`;
+
+  const devisSelect = document.getElementById('facture-devis-select');
+  const typeSelect = document.querySelector('#form-facture select[name="type"]');
+  const pctField = document.getElementById('facture-pct-field');
+  const syncPctVisible = () => { pctField.hidden = typeSelect.value !== 'Acompte'; };
+  typeSelect.onchange = syncPctVisible; syncPctVisible();
+
   document.getElementById('form-facture').onsubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const ht = Number(fd.get('montant_ht')||0);
-    const tva = ht * Number(state.entreprise.taux_tva||0) / 100;
-    const clientId = fd.get('client_id') || null;
-    const clientNom = clientId ? (clients||[]).find(c=>c.id===clientId)?.nom : null;
-    const { error } = await sb.from('factures').insert({
-      entreprise_id: state.entreprise.id, numero_facture: fd.get('numero_facture'), numero_chantier: fd.get('numero_chantier'),
-      client_id: clientId, client_nom: clientNom, type: fd.get('type'),
+    const devisId = fd.get('devis_id') || null;
+    const type = fd.get('type');
+    const devis = devisId ? (devisList||[]).find(d => d.id === devisId) : null;
+
+    let clientId = fd.get('client_id') || null;
+    let clientNom = clientId ? (clients||[]).find(c=>c.id===clientId)?.nom : null;
+    let numeroChantier = null;
+    let tauxTva = Number(state.entreprise.taux_tva||0);
+    let factureLignes = [];
+
+    if (devis){
+      clientId = devis.client_id; clientNom = devis.client_nom; numeroChantier = devis.numero_chantier;
+      tauxTva = Number(devis.taux_tva||tauxTva);
+      const { data: devisLignes } = await sb.from('devis_lignes').select('*').eq('devis_id', devis.id);
+      const totalHtDevis = (devisLignes||[]).reduce((s,l)=>s+Number(l.total_ligne||0),0);
+      if (type === 'Facture unique'){
+        factureLignes = (devisLignes||[]).map(l => ({ designation: l.designation, quantite: 1, prix_unitaire_ht: Number(l.total_ligne||0), taux_tva: tauxTva }));
+      } else if (type === 'Acompte'){
+        const pct = Number(fd.get('pct_acompte')||0);
+        factureLignes = [{ designation: `Acompte sur devis ${devis.numero||devis.numero_chantier} (${pct}%)`, quantite: 1, prix_unitaire_ht: totalHtDevis * pct / 100, taux_tva: tauxTva }];
+      } else if (type === 'Solde'){
+        const { data: dejaFacture } = await sb.from('factures').select('montant_ht').eq('devis_id', devis.id).neq('type', 'Avoir');
+        const dejaHT = (dejaFacture||[]).reduce((s,f)=>s+Number(f.montant_ht||0),0);
+        factureLignes = [{ designation: `Solde sur devis ${devis.numero||devis.numero_chantier}`, quantite: 1, prix_unitaire_ht: totalHtDevis - dejaHT, taux_tva: tauxTva }];
+      }
+    }
+
+    const { data: numero, error: numErr } = await sb.rpc('prochain_numero', { p_entreprise_id: state.entreprise.id, p_type: 'facture', p_prefixe: 'FA' });
+    if (numErr) return toast('Erreur numérotation : ' + numErr.message);
+
+    const totalHT = factureLignes.reduce((s,l)=>s+l.prix_unitaire_ht*l.quantite,0);
+    const totalTVA = factureLignes.reduce((s,l)=>s+l.prix_unitaire_ht*l.quantite*Number(l.taux_tva||0)/100,0);
+
+    const { data: facture, error } = await sb.from('factures').insert({
+      entreprise_id: state.entreprise.id, numero_facture: numero, numero_chantier: numeroChantier,
+      client_id: clientId, client_nom: clientNom, type, devis_id: devis?.id||null,
       date_emission: fd.get('date_emission')||todayISO(), date_echeance: fd.get('date_echeance')||null,
-      montant_ht: ht, tva, montant_ttc: ht+tva,
-    });
+      montant_ht: totalHT, tva: totalTVA, montant_ttc: totalHT+totalTVA,
+      conditions_paiement: state.entreprise.conditions_paiement||null,
+    }).select().single();
     if (error) return toast('Erreur : ' + error.message);
+
+    if (factureLignes.length){
+      const { error: lignesErr } = await sb.from('factures_lignes').insert(
+        factureLignes.map(l => ({ facture_id: facture.id, designation: l.designation, quantite: l.quantite, prix_unitaire_ht: l.prix_unitaire_ht, taux_tva: l.taux_tva, total_ht: l.prix_unitaire_ht*l.quantite }))
+      );
+      if (lignesErr) toast('Facture créée, erreur lignes : ' + lignesErr.message);
+    }
+    state.selectedFactureId = facture.id;
     toast('Facture émise.'); viewFactures(main);
   };
-  main.querySelectorAll('[data-pay-facture]').forEach(b => b.onclick = async () => {
-    const { error } = await sb.from('factures').update({ date_paiement: todayISO() }).eq('id', b.dataset.payFacture);
+  main.querySelectorAll('[data-select-facture]').forEach(b => b.onclick = () => { state.selectedFactureId = b.dataset.selectFacture; viewFactures(main); });
+
+  if (selected) await renderFactureDetail(selected);
+}
+
+async function renderFactureDetail(facture){
+  const detail = document.getElementById('facture-detail');
+  const [{ data: lignes }, { data: base }] = await Promise.all([
+    sb.from('factures_lignes').select('*').eq('facture_id', facture.id).order('created_at'),
+    sb.from('factures').select('*').eq('id', facture.id).single(),
+  ]);
+  detail.innerHTML = `
+    <div class="card">
+      <div class="card-row">
+        <h3 style="margin:0">${esc(facture.numero_facture)} — ${esc(facture.client_nom||'client ponctuel')}</h3>
+        <div style="display:flex;gap:8px">
+          ${facture.statut!=='Payee' && facture.type!=='Avoir' ? `<button class="btn btn-ghost btn-sm" id="btn-pay-facture">Marquer payée</button>` : ''}
+          ${facture.type!=='Avoir' ? `<button class="btn btn-ghost btn-sm" id="btn-avoir-facture">Générer un avoir</button>` : ''}
+        </div>
+      </div>
+      <div class="view-sub">Chantier ${esc(facture.numero_chantier||'—')} · Émise le ${esc(facture.date_emission)} · Échéance ${esc(facture.date_echeance||'—')} ${facture.date_echeance?echeancePill(facture.date_echeance):''} · ${esc(base?.conditions_paiement||'')}</div>
+      <form id="form-facture-ligne" class="form-grid" style="margin:14px 0">
+        <div class="field"><label>Désignation</label><input name="designation" required></div>
+        <div class="field"><label>Quantité</label><input name="quantite" type="number" step="0.5" value="1" required></div>
+        <div class="field"><label>Prix unit. HT (€)</label><input name="prix_unitaire_ht" type="number" step="0.5" required></div>
+        <div class="field"><label>TVA (%)</label><input name="taux_tva" type="number" step="0.5" value="${state.entreprise.taux_tva}"></div>
+        <div class="field"><button class="btn btn-ghost" type="submit">+ Ligne</button></div>
+      </form>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Désignation</th><th class="num">Qté</th><th class="num">PU HT</th><th class="num">TVA</th><th class="num">Total HT</th><th></th></tr></thead>
+        <tbody>
+          ${(lignes&&lignes.length) ? lignes.map(l => `
+            <tr>
+              <td>${esc(l.designation)}</td><td class="num">${num(l.quantite)}</td><td class="num">${money(l.prix_unitaire_ht)}</td>
+              <td class="num">${num(l.taux_tva,1)}%</td><td class="num"><strong>${money(l.total_ht)}</strong></td>
+              <td><button class="btn btn-ghost btn-sm" data-del-facture-ligne="${l.id}">×</button></td>
+            </tr>`).join('') : emptyRow(6,'Aucune ligne.')}
+        </tbody>
+        <tfoot>
+          <tr><td colspan="4" style="text-align:right;font-weight:600">Total HT</td><td class="num" style="font-weight:700">${money(facture.montant_ht)}</td><td></td></tr>
+          <tr><td colspan="4" style="text-align:right;color:var(--fg-muted)">TVA</td><td class="num">${money(facture.tva)}</td><td></td></tr>
+          <tr><td colspan="4" style="text-align:right;font-weight:700">Total TTC</td><td class="num" style="font-weight:700">${money(facture.montant_ttc)}</td><td></td></tr>
+        </tfoot>
+      </table></div>
+    </div>`;
+
+  const refreshTotals = async () => {
+    const { data: l2 } = await sb.from('factures_lignes').select('*').eq('facture_id', facture.id);
+    const ht = (l2||[]).reduce((s,l)=>s+Number(l.total_ht||0),0);
+    const tva = (l2||[]).reduce((s,l)=>s+Number(l.total_ht||0)*Number(l.taux_tva||0)/100,0);
+    await sb.from('factures').update({ montant_ht: ht, tva, montant_ttc: ht+tva }).eq('id', facture.id);
+  };
+
+  document.getElementById('form-facture-ligne').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const qte = Number(fd.get('quantite')||1), pu = Number(fd.get('prix_unitaire_ht')||0);
+    const { error } = await sb.from('factures_lignes').insert({
+      facture_id: facture.id, designation: fd.get('designation'), quantite: qte,
+      prix_unitaire_ht: pu, taux_tva: Number(fd.get('taux_tva')||0), total_ht: qte*pu,
+    });
     if (error) return toast('Erreur : ' + error.message);
-    toast('Facture marquée payée.'); viewFactures(main);
+    await refreshTotals(); toast('Ligne ajoutée.'); viewFactures(document.getElementById('main'));
+  };
+  detail.querySelectorAll('[data-del-facture-ligne]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.from('factures_lignes').delete().eq('id', b.dataset.delFactureLigne);
+    if (error) return toast('Erreur : ' + error.message);
+    await refreshTotals(); toast('Ligne retirée.'); viewFactures(document.getElementById('main'));
   });
+  const payBtn = document.getElementById('btn-pay-facture');
+  if (payBtn) payBtn.onclick = async () => {
+    const { error } = await sb.from('factures').update({ date_paiement: todayISO() }).eq('id', facture.id);
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Facture marquée payée.'); viewFactures(document.getElementById('main'));
+  };
+  const avoirBtn = document.getElementById('btn-avoir-facture');
+  if (avoirBtn) avoirBtn.onclick = async () => {
+    if (!confirm(`Générer un avoir annulant ${facture.numero_facture} (${money(facture.montant_ttc)}) ?`)) return;
+    const { data: numero, error: numErr } = await sb.rpc('prochain_numero', { p_entreprise_id: state.entreprise.id, p_type: 'avoir', p_prefixe: 'AV' });
+    if (numErr) return toast('Erreur numérotation : ' + numErr.message);
+    const { data: avoir, error } = await sb.from('factures').insert({
+      entreprise_id: state.entreprise.id, numero_facture: numero, numero_chantier: facture.numero_chantier,
+      client_id: base?.client_id||null, client_nom: facture.client_nom, type: 'Avoir',
+      devis_id: base?.devis_id||null, facture_liee_id: facture.id,
+      date_emission: todayISO(), montant_ht: -Number(facture.montant_ht||0), tva: -Number(facture.tva||0), montant_ttc: -Number(facture.montant_ttc||0),
+    }).select().single();
+    if (error) return toast('Erreur : ' + error.message);
+    const { data: origLignes } = await sb.from('factures_lignes').select('*').eq('facture_id', facture.id);
+    if (origLignes && origLignes.length){
+      await sb.from('factures_lignes').insert(origLignes.map(l => ({
+        facture_id: avoir.id, designation: `Avoir — ${l.designation}`, quantite: l.quantite,
+        prix_unitaire_ht: -Number(l.prix_unitaire_ht||0), taux_tva: l.taux_tva, total_ht: -Number(l.total_ht||0),
+      })));
+    }
+    state.selectedFactureId = avoir.id;
+    toast('Avoir généré.'); viewFactures(document.getElementById('main'));
+  };
 }
 function factureStatutPill(s){
   const map = { 'Payee':['pill-ok','Payée'], 'En retard':['pill-bad','En retard'], 'En attente':['pill-warn','En attente'] };
   const [cls,label] = map[s] || ['pill-muted', s];
   return `<span class="pill ${cls}">${esc(label)}</span>`;
+}
+
+// ---------- PLANNING ----------
+async function viewPlanning(main){
+  const [{ data: interventions }, { data: employes }] = await Promise.all([
+    sb.from('v_planning_semaine').select('*').eq('entreprise_id', state.entreprise.id),
+    sb.from('employes').select('*').eq('entreprise_id', state.entreprise.id).eq('actif', true).order('nom'),
+  ]);
+  const list = interventions || [];
+  const parJour = {};
+  list.forEach(i => { const j = (i.date_debut||'').slice(0,10); (parJour[j] = parJour[j]||[]).push(i); });
+  const jours = Object.keys(parJour).sort();
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Planning</h1><div class="view-sub">Interventions des 14 prochains jours — qui va où, et quand.</div></div></div>
+    <div class="card">
+      <form id="form-intervention" class="form-grid">
+        <div class="field"><label>Titre</label><input name="titre" required placeholder="Pose isolation combles"></div>
+        <div class="field"><label>N° chantier</label><input name="numero_chantier"></div>
+        <div class="field"><label>Salarié</label>
+          <select name="employe_id"><option value="">—</option>${(employes||[]).map(e=>`<option value="${e.id}">${esc(e.nom)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Début</label><input name="date_debut" type="datetime-local" value="${nowLocalInput()}" required></div>
+        <div class="field"><label>Fin</label><input name="date_fin" type="datetime-local" required></div>
+        <div class="field"><button class="btn btn-primary" type="submit">+ Planifier</button></div>
+      </form>
+    </div>
+    ${jours.length ? jours.map(j => `
+      <div class="card">
+        <h3>${esc(new Date(j).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))}</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Horaire</th><th>Titre</th><th>Chantier</th><th>Salarié</th><th>Statut</th><th></th></tr></thead>
+          <tbody>
+            ${parJour[j].map(i => `
+              <tr>
+                <td>${dt(i.date_debut).split(' ')[1]} – ${dt(i.date_fin).split(' ')[1]}</td>
+                <td>${esc(i.titre)}</td><td>${esc(i.numero_chantier||'—')}</td><td>${esc(i.employe_nom||'—')}</td>
+                <td>${interventionStatutPill(i.statut)}</td>
+                <td><button class="btn btn-ghost btn-sm" data-del-intervention="${i.id}">×</button></td>
+              </tr>`).join('')}
+          </tbody>
+        </table></div>
+      </div>`).join('') : `<div class="card"><div class="view-sub">Aucune intervention planifiée sur les 14 prochains jours.</div></div>`}
+  `;
+  document.getElementById('form-intervention').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const emp = (employes||[]).find(x=>x.id===fd.get('employe_id'));
+    const { error } = await sb.from('interventions').insert({
+      entreprise_id: state.entreprise.id, titre: fd.get('titre'), numero_chantier: fd.get('numero_chantier')||null,
+      employe_id: emp?.id||null, employe_nom: emp?.nom||null,
+      date_debut: fd.get('date_debut'), date_fin: fd.get('date_fin')||fd.get('date_debut'),
+    });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Intervention planifiée.'); viewPlanning(main);
+  };
+  main.querySelectorAll('[data-del-intervention]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.from('interventions').delete().eq('id', b.dataset.delIntervention);
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Intervention retirée.'); viewPlanning(main);
+  });
+}
+function interventionStatutPill(s){
+  const cls = s==='Terminee' ? 'pill-ok' : s==='Annulee' ? 'pill-bad' : 'pill-warn';
+  const label = {'Planifiee':'Planifiée','Terminee':'Terminée','Annulee':'Annulée'}[s] || (s||'—');
+  return `<span class="pill ${cls}">${esc(label)}</span>`;
+}
+
+// ---------- ACHATS & FOURNISSEURS ----------
+async function viewAchats(main){
+  const [{ data: fournisseurs }, { data: commandes }, { data: stockItems }] = await Promise.all([
+    sb.from('fournisseurs').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
+    sb.from('commandes_fournisseurs').select('*').eq('entreprise_id', state.entreprise.id).order('date_commande', { ascending:false }),
+    sb.from('stock').select('*').eq('entreprise_id', state.entreprise.id).order('designation'),
+  ]);
+  if (!state.selectedCommandeId && commandes && commandes.length) state.selectedCommandeId = commandes[0].id;
+  const selected = (commandes||[]).find(c => c.id === state.selectedCommandeId) || null;
+
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Achats & fournisseurs</h1><div class="view-sub">Bons de commande liés au stock — réception = entrée de stock automatique.</div></div></div>
+    <div class="card">
+      <div class="card-row"><h3 style="margin:0">Fournisseurs</h3></div>
+      <form id="form-fournisseur" class="form-grid" style="margin-bottom:14px">
+        <div class="field"><label>Nom</label><input name="nom" required></div>
+        <div class="field"><label>Contact</label><input name="contact"></div>
+        <div class="field"><label>Téléphone</label><input name="telephone"></div>
+        <div class="field"><label>Email</label><input name="email" type="email"></div>
+        <div class="field"><button class="btn btn-ghost" type="submit">+ Ajouter</button></div>
+      </form>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Nom</th><th>Contact</th><th>Téléphone</th><th>Email</th></tr></thead>
+        <tbody>${(fournisseurs&&fournisseurs.length) ? fournisseurs.map(f=>`<tr><td>${esc(f.nom)}</td><td>${esc(f.contact||'—')}</td><td>${esc(f.telephone||'—')}</td><td>${esc(f.email||'—')}</td></tr>`).join('') : emptyRow(4,'Aucun fournisseur.')}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>Nouveau bon de commande</h3>
+      <form id="form-commande" class="form-grid">
+        <div class="field"><label>Fournisseur</label>
+          <select name="fournisseur_id" required><option value="">—</option>${(fournisseurs||[]).map(f=>`<option value="${f.id}">${esc(f.nom)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Date</label><input name="date_commande" type="date" value="${todayISO()}"></div>
+        <div class="field"><button class="btn btn-primary" type="submit">+ Créer le bon</button></div>
+      </form>
+    </div>
+    <div class="two-pane">
+      <div class="pane-list">
+        <h3 style="font-size:13px;margin-bottom:10px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.03em">Bons de commande</h3>
+        ${(commandes&&commandes.length) ? commandes.map(c => `
+          <div class="list-item${c.id===state.selectedCommandeId?' active':''}">
+            <button data-select-commande="${c.id}">
+              <div><strong>${esc(c.numero||'BC')}</strong></div>
+              <div class="meta">${esc(c.fournisseur_nom||'—')} · ${esc(c.date_commande)} · ${esc(c.statut)}</div>
+            </button>
+          </div>`).join('') : `<div class="meta">Aucun bon de commande.</div>`}
+      </div>
+      <div class="pane-detail" id="commande-detail"></div>
+    </div>`;
+
+  document.getElementById('form-fournisseur').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from('fournisseurs').insert({ entreprise_id: state.entreprise.id, nom: fd.get('nom'), contact: fd.get('contact'), telephone: fd.get('telephone'), email: fd.get('email') });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Fournisseur ajouté.'); viewAchats(main);
+  };
+  document.getElementById('form-commande').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const four = (fournisseurs||[]).find(f=>f.id===fd.get('fournisseur_id'));
+    const { data: numero, error: numErr } = await sb.rpc('prochain_numero', { p_entreprise_id: state.entreprise.id, p_type: 'commande', p_prefixe: 'BC' });
+    if (numErr) return toast('Erreur numérotation : ' + numErr.message);
+    const { data, error } = await sb.from('commandes_fournisseurs').insert({
+      entreprise_id: state.entreprise.id, numero, fournisseur_id: four?.id||null, fournisseur_nom: four?.nom||null, date_commande: fd.get('date_commande')||todayISO(),
+    }).select().single();
+    if (error) return toast('Erreur : ' + error.message);
+    state.selectedCommandeId = data.id;
+    toast('Bon de commande créé.'); viewAchats(main);
+  };
+  main.querySelectorAll('[data-select-commande]').forEach(b => b.onclick = () => { state.selectedCommandeId = b.dataset.selectCommande; viewAchats(main); });
+  if (selected) await renderCommandeDetail(selected, stockItems||[]);
+}
+
+async function renderCommandeDetail(commande, stockItems){
+  const detail = document.getElementById('commande-detail');
+  const { data: lignes } = await sb.from('commandes_fournisseurs_lignes').select('*').eq('commande_id', commande.id).order('created_at');
+  const total = (lignes||[]).reduce((s,l)=>s+Number(l.total||0),0);
+  detail.innerHTML = `
+    <div class="card">
+      <div class="card-row">
+        <h3 style="margin:0">${esc(commande.numero||'Bon de commande')} — ${esc(commande.fournisseur_nom||'—')}</h3>
+        <select id="commande-statut" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)">
+          ${['Commandee','Partiellement recue','Receptionnee'].map(s=>`<option value="${s}" ${s===commande.statut?'selected':''}>${s.replace('Recue','reçue').replace('Receptionnee','Réceptionnée').replace('Commandee','Commandée')}</option>`).join('')}
+        </select>
+      </div>
+      <form id="form-commande-ligne" class="form-grid" style="margin-bottom:14px">
+        <div class="field"><label>Article stock (optionnel)</label>
+          <select name="stock_id"><option value="">— libre —</option>${stockItems.map(s=>`<option value="${s.id}">${esc(s.designation)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Désignation</label><input name="designation" required></div>
+        <div class="field"><label>Quantité</label><input name="quantite" type="number" step="1" value="1" required></div>
+        <div class="field"><label>Prix unitaire (€)</label><input name="prix_unitaire" type="number" step="0.1" value="0" required></div>
+        <div class="field"><button class="btn btn-ghost" type="submit">+ Ligne</button></div>
+      </form>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Désignation</th><th class="num">Qté</th><th class="num">PU</th><th class="num">Total</th><th>Reçue</th><th></th></tr></thead>
+        <tbody>
+          ${(lignes&&lignes.length) ? lignes.map(l => `
+            <tr>
+              <td>${esc(l.designation)}</td><td class="num">${num(l.quantite)}</td><td class="num">${money(l.prix_unitaire)}</td><td class="num">${money(l.total)}</td>
+              <td>${l.recue ? '<span class="pill pill-ok">Oui</span>' : `<button class="btn btn-ghost btn-sm" data-recevoir="${l.id}">Marquer reçue</button>`}</td>
+              <td><button class="btn btn-ghost btn-sm" data-del-commande-ligne="${l.id}">×</button></td>
+            </tr>`).join('') : emptyRow(6,'Aucune ligne.')}
+        </tbody>
+        <tfoot><tr><td colspan="3" style="text-align:right;font-weight:600">Total</td><td class="num" style="font-weight:700">${money(total)}</td><td colspan="2"></td></tr></tfoot>
+      </table></div>
+    </div>`;
+  document.getElementById('commande-statut').onchange = async (e) => {
+    await sb.from('commandes_fournisseurs').update({ statut: e.target.value }).eq('id', commande.id);
+    toast('Statut mis à jour.');
+  };
+  document.getElementById('form-commande-ligne').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const qte = Number(fd.get('quantite')||1), pu = Number(fd.get('prix_unitaire')||0);
+    const stockId = fd.get('stock_id') || null;
+    const designation = fd.get('designation') || (stockItems.find(s=>s.id===stockId)?.designation) || '—';
+    const { error } = await sb.from('commandes_fournisseurs_lignes').insert({ commande_id: commande.id, stock_id: stockId, designation, quantite: qte, prix_unitaire: pu, total: qte*pu });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Ligne ajoutée.'); renderCommandeDetail(commande, stockItems);
+  };
+  detail.querySelectorAll('[data-del-commande-ligne]').forEach(b => b.onclick = async () => {
+    await sb.from('commandes_fournisseurs_lignes').delete().eq('id', b.dataset.delCommandeLigne);
+    toast('Ligne retirée.'); renderCommandeDetail(commande, stockItems);
+  });
+  detail.querySelectorAll('[data-recevoir]').forEach(b => b.onclick = async () => {
+    const ligne = (lignes||[]).find(l => l.id === b.dataset.recevoir);
+    await sb.from('commandes_fournisseurs_lignes').update({ recue: true }).eq('id', ligne.id);
+    if (ligne.stock_id){
+      const { data: art } = await sb.from('stock').select('quantite').eq('id', ligne.stock_id).single();
+      if (art) await sb.from('stock').update({ quantite: Number(art.quantite||0) + Number(ligne.quantite||0) }).eq('id', ligne.stock_id);
+    }
+    toast('Ligne reçue — stock mis à jour.'); renderCommandeDetail(commande, stockItems);
+  });
+}
+
+// ---------- MATERIEL & VEHICULES ----------
+async function viewMateriel(main){
+  const [{ data: materiel }, { data: employes }] = await Promise.all([
+    sb.from('materiel').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
+    sb.from('employes').select('*').eq('entreprise_id', state.entreprise.id).eq('actif', true).order('nom'),
+  ]);
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Matériel & véhicules</h1><div class="view-sub">Outillage et véhicules — affectation, contrôles et assurances à échéance.</div></div></div>
+    <div class="card">
+      <form id="form-materiel" class="form-grid">
+        <div class="field"><label>Nom</label><input name="nom" required></div>
+        <div class="field"><label>Type</label><select name="type"><option>Outillage</option><option>Vehicule</option></select></div>
+        <div class="field"><label>Immatriculation</label><input name="immatriculation"></div>
+        <div class="field"><label>N° série</label><input name="numero_serie"></div>
+        <div class="field"><label>Affecté à (salarié)</label><select name="affecte_a_employe_id"><option value="">—</option>${(employes||[]).map(e=>`<option value="${e.id}">${esc(e.nom)}</option>`).join('')}</select></div>
+        <div class="field"><label>Affecté au chantier</label><input name="affecte_a_chantier"></div>
+        <div class="field"><label>Prochain contrôle</label><input name="date_prochain_controle" type="date"></div>
+        <div class="field"><label>Prochaine assurance</label><input name="date_prochaine_assurance" type="date"></div>
+        <div class="field"><button class="btn btn-primary" type="submit">+ Ajouter</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table>
+        <thead><tr><th>Nom</th><th>Type</th><th>Immat. / série</th><th>Affectation</th><th>Contrôle</th><th>Assurance</th><th></th></tr></thead>
+        <tbody>
+          ${(materiel&&materiel.length) ? materiel.map(m => `
+            <tr>
+              <td>${esc(m.nom)}</td><td>${esc(m.type)}</td><td>${esc(m.immatriculation||m.numero_serie||'—')}</td>
+              <td>${esc(m.affecte_a_chantier||'—')}</td>
+              <td>${echeancePill(m.date_prochain_controle, 'Contrôle')}</td>
+              <td>${echeancePill(m.date_prochaine_assurance, 'Assurance')}</td>
+              <td><button class="btn btn-ghost btn-sm" data-del-materiel="${m.id}">Retirer</button></td>
+            </tr>`).join('') : emptyRow(7,'Aucun matériel ou véhicule enregistré.')}
+        </tbody>
+      </table></div>
+    </div>`;
+  document.getElementById('form-materiel').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from('materiel').insert({
+      entreprise_id: state.entreprise.id, nom: fd.get('nom'), type: fd.get('type'),
+      immatriculation: fd.get('immatriculation')||null, numero_serie: fd.get('numero_serie')||null,
+      affecte_a_employe_id: fd.get('affecte_a_employe_id')||null, affecte_a_chantier: fd.get('affecte_a_chantier')||null,
+      date_prochain_controle: fd.get('date_prochain_controle')||null, date_prochaine_assurance: fd.get('date_prochaine_assurance')||null,
+    });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Matériel ajouté.'); viewMateriel(main);
+  };
+  main.querySelectorAll('[data-del-materiel]').forEach(b => b.onclick = async () => {
+    await sb.from('materiel').delete().eq('id', b.dataset.delMateriel);
+    toast('Matériel retiré.'); viewMateriel(main);
+  });
+}
+
+// ---------- RH ETENDU (conges + habilitations) ----------
+async function viewRH(main){
+  const [{ data: employes }, { data: conges }, { data: habilitations }] = await Promise.all([
+    sb.from('employes').select('*').eq('entreprise_id', state.entreprise.id).eq('actif', true).order('nom'),
+    sb.from('conges').select('*').eq('entreprise_id', state.entreprise.id).order('date_debut', { ascending:false }),
+    sb.from('habilitations').select('*').eq('entreprise_id', state.entreprise.id).order('date_expiration'),
+  ]);
+  main.innerHTML = `
+    <div class="view-head"><div><h1>RH</h1><div class="view-sub">Congés/absences et habilitations — alerte automatique à 30 jours de l'expiration.</div></div></div>
+    <div class="card">
+      <h3>Congés & absences</h3>
+      <form id="form-conge" class="form-grid" style="margin-bottom:14px">
+        <div class="field"><label>Salarié</label><select name="employe_id" required><option value="">—</option>${(employes||[]).map(e=>`<option value="${e.id}">${esc(e.nom)}</option>`).join('')}</select></div>
+        <div class="field"><label>Type</label><select name="type"><option>Conges payes</option><option>RTT</option><option>Maladie</option><option>Sans solde</option></select></div>
+        <div class="field"><label>Début</label><input name="date_debut" type="date" required></div>
+        <div class="field"><label>Fin</label><input name="date_fin" type="date" required></div>
+        <div class="field"><button class="btn btn-ghost" type="submit">+ Ajouter</button></div>
+      </form>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Salarié</th><th>Type</th><th>Début</th><th>Fin</th><th>Statut</th></tr></thead>
+        <tbody>${(conges&&conges.length) ? conges.map(c=>`<tr><td>${esc(c.employe_nom||'—')}</td><td>${esc(c.type)}</td><td>${esc(c.date_debut)}</td><td>${esc(c.date_fin)}</td><td><span class="pill pill-muted">${esc(c.statut)}</span></td></tr>`).join('') : emptyRow(5,'Aucun congé enregistré.')}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>Habilitations & qualifications</h3>
+      <form id="form-habilitation" class="form-grid" style="margin-bottom:14px">
+        <div class="field"><label>Salarié</label><select name="employe_id" required><option value="">—</option>${(employes||[]).map(e=>`<option value="${e.id}">${esc(e.nom)}</option>`).join('')}</select></div>
+        <div class="field"><label>Intitulé</label><input name="intitule" required placeholder="CACES, habilitation électrique…"></div>
+        <div class="field"><label>Obtention</label><input name="date_obtention" type="date"></div>
+        <div class="field"><label>Expiration</label><input name="date_expiration" type="date"></div>
+        <div class="field"><button class="btn btn-ghost" type="submit">+ Ajouter</button></div>
+      </form>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Salarié</th><th>Intitulé</th><th>Obtention</th><th>Expiration</th></tr></thead>
+        <tbody>${(habilitations&&habilitations.length) ? habilitations.map(h=>`<tr><td>${esc(h.employe_nom||'—')}</td><td>${esc(h.intitule)}</td><td>${esc(h.date_obtention||'—')}</td><td>${echeancePill(h.date_expiration)}</td></tr>`).join('') : emptyRow(4,'Aucune habilitation enregistrée.')}</tbody>
+      </table></div>
+    </div>`;
+  document.getElementById('form-conge').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const emp = (employes||[]).find(x=>x.id===fd.get('employe_id'));
+    const { error } = await sb.from('conges').insert({ entreprise_id: state.entreprise.id, employe_id: emp?.id, employe_nom: emp?.nom, type: fd.get('type'), date_debut: fd.get('date_debut'), date_fin: fd.get('date_fin') });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Congé ajouté.'); viewRH(main);
+  };
+  document.getElementById('form-habilitation').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const emp = (employes||[]).find(x=>x.id===fd.get('employe_id'));
+    const { error } = await sb.from('habilitations').insert({ entreprise_id: state.entreprise.id, employe_id: emp?.id, employe_nom: emp?.nom, intitule: fd.get('intitule'), date_obtention: fd.get('date_obtention')||null, date_expiration: fd.get('date_expiration')||null });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Habilitation ajoutée.'); viewRH(main);
+  };
+}
+
+// ---------- SOUS-TRAITANCE ----------
+async function viewSousTraitance(main){
+  const [{ data: sousTraitants }, { data: chantiers }] = await Promise.all([
+    sb.from('sous_traitants').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
+    sb.from('sous_traitance_chantiers').select('*').eq('entreprise_id', state.entreprise.id).order('created_at', { ascending:false }),
+  ]);
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Sous-traitance</h1><div class="view-sub">Sous-traitants et montants à payer par chantier.</div></div></div>
+    <div class="card">
+      <h3>Sous-traitants</h3>
+      <form id="form-sous-traitant" class="form-grid" style="margin-bottom:14px">
+        <div class="field"><label>Nom</label><input name="nom" required></div>
+        <div class="field"><label>SIRET</label><input name="siret"></div>
+        <div class="field"><label>Contact</label><input name="contact"></div>
+        <div class="field"><label>Décennale valide jusqu'au</label><input name="assurance_decennale_validite" type="date"></div>
+        <div class="field"><button class="btn btn-ghost" type="submit">+ Ajouter</button></div>
+      </form>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Nom</th><th>SIRET</th><th>Contact</th><th>Décennale</th></tr></thead>
+        <tbody>${(sousTraitants&&sousTraitants.length) ? sousTraitants.map(s=>`<tr><td>${esc(s.nom)}</td><td>${esc(s.siret||'—')}</td><td>${esc(s.contact||'—')}</td><td>${echeancePill(s.assurance_decennale_validite,'Décennale')}</td></tr>`).join('') : emptyRow(4,'Aucun sous-traitant.')}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>Montants par chantier</h3>
+      <form id="form-sous-chantier" class="form-grid" style="margin-bottom:14px">
+        <div class="field"><label>Sous-traitant</label><select name="sous_traitant_id" required><option value="">—</option>${(sousTraitants||[]).map(s=>`<option value="${s.id}">${esc(s.nom)}</option>`).join('')}</select></div>
+        <div class="field"><label>N° chantier</label><input name="numero_chantier"></div>
+        <div class="field"><label>Montant HT (€)</label><input name="montant_ht" type="number" step="10" required></div>
+        <div class="field"><button class="btn btn-ghost" type="submit">+ Ajouter</button></div>
+      </form>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Sous-traitant</th><th>Chantier</th><th class="num">Montant HT</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          ${(chantiers&&chantiers.length) ? chantiers.map(c => `
+            <tr>
+              <td>${esc(c.sous_traitant_nom||'—')}</td><td>${esc(c.numero_chantier||'—')}</td><td class="num">${money(c.montant_ht)}</td>
+              <td>${c.statut_paiement==='Paye' ? '<span class="pill pill-ok">Payé</span>' : '<span class="pill pill-warn">À payer</span>'}</td>
+              <td>${c.statut_paiement!=='Paye' ? `<button class="btn btn-ghost btn-sm" data-pay-soustraitant="${c.id}">Marquer payé</button>` : ''}</td>
+            </tr>`).join('') : emptyRow(5,'Aucun montant enregistré.')}
+        </tbody>
+      </table></div>
+    </div>`;
+  document.getElementById('form-sous-traitant').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from('sous_traitants').insert({ entreprise_id: state.entreprise.id, nom: fd.get('nom'), siret: fd.get('siret'), contact: fd.get('contact'), assurance_decennale_validite: fd.get('assurance_decennale_validite')||null });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Sous-traitant ajouté.'); viewSousTraitance(main);
+  };
+  document.getElementById('form-sous-chantier').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const st = (sousTraitants||[]).find(s=>s.id===fd.get('sous_traitant_id'));
+    const { error } = await sb.from('sous_traitance_chantiers').insert({ entreprise_id: state.entreprise.id, sous_traitant_id: st?.id, sous_traitant_nom: st?.nom, numero_chantier: fd.get('numero_chantier'), montant_ht: Number(fd.get('montant_ht')||0) });
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Montant ajouté.'); viewSousTraitance(main);
+  };
+  main.querySelectorAll('[data-pay-soustraitant]').forEach(b => b.onclick = async () => {
+    await sb.from('sous_traitance_chantiers').update({ statut_paiement:'Paye', date_paiement: todayISO() }).eq('id', b.dataset.paySoustraitant);
+    toast('Marqué payé.'); viewSousTraitance(main);
+  });
 }
 
 // ---------- ROOT RENDER ----------
