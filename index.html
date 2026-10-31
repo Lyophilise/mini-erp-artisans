@@ -39,14 +39,21 @@ a{color:var(--accent)}
 img{max-width:100%}
 
 .app{display:flex;min-height:100%;width:100%}
-.sidebar{width:220px;flex:0 0 220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:20px 12px;gap:4px}
-.brand{display:flex;align-items:center;gap:10px;padding:4px 10px 20px}
+.sidebar{width:228px;flex:0 0 228px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 10px;gap:2px;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 10px 18px}
 .brand-mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:15px;flex:none}
 .brand-name{font-family:var(--font-display);font-weight:600;font-size:16px}
-.nav-btn{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:none;background:transparent;color:var(--fg-muted);text-align:left;font-size:13.5px;font-weight:500;white-space:nowrap}
+.nav-group-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-muted);padding:14px 12px 6px;opacity:.75}
+.nav-group:first-of-type .nav-group-label{padding-top:2px}
+.nav-btn{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;border:none;background:transparent;color:var(--fg-muted);text-align:left;font-size:13.5px;font-weight:500;white-space:nowrap;width:100%}
+.nav-btn svg{flex:none;width:16px;height:16px;opacity:.8}
 .nav-btn:hover{background:var(--surface-2);color:var(--fg)}
 .nav-btn.active{background:var(--accent);color:#fff}
+.nav-btn.active svg{opacity:1}
 .nav-spacer{flex:1}
+.nav-search-hint{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 2px 10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg-muted);font-size:12px;cursor:pointer}
+.nav-search-hint:hover{border-color:var(--accent-2)}
+.nav-search-hint kbd{font-family:var(--font-mono);font-size:10.5px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:1px 5px}
 .nav-foot{padding:10px 12px;border-top:1px solid var(--border);margin-top:8px;display:flex;flex-direction:column;gap:6px}
 .nav-ent{font-size:12px;color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .logout{background:none;border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--fg-muted);font-size:12.5px}
@@ -122,6 +129,62 @@ tbody tr:hover{background:var(--surface-2)}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:13px;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
 .toast.show{opacity:1}
 
+/* ---- list toolbar / search ---- */
+.list-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.search-input{flex:1;max-width:320px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--fg);font-size:13px}
+.search-input:focus{outline:2px solid var(--accent-2);outline-offset:-1px}
+.view-actions{display:flex;gap:8px;align-items:center}
+.segmented{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.segmented button{padding:7px 13px;font-size:12.5px;font-weight:600;background:var(--surface);color:var(--fg-muted);border:none;border-right:1px solid var(--border)}
+.segmented button:last-child{border-right:none}
+.segmented button.active{background:var(--accent);color:#fff}
+
+/* ---- drawer (slide-over form panel) ---- */
+.drawer-backdrop{position:fixed;inset:0;background:rgba(12,18,16,.45);z-index:60;animation:fadeIn .15s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideIn{from{transform:translateX(24px);opacity:0}to{transform:translateX(0);opacity:1}}
+.drawer-panel{position:fixed;top:0;right:0;height:100%;width:min(460px,92vw);background:var(--surface);border-left:1px solid var(--border);z-index:61;display:flex;flex-direction:column;box-shadow:-12px 0 32px rgba(0,0,0,.14);animation:slideIn .18s ease}
+.drawer-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);flex:none}
+.drawer-head h3{font-size:16px}
+.drawer-close{background:none;border:none;color:var(--fg-muted);font-size:18px;line-height:1;padding:4px;border-radius:6px}
+.drawer-close:hover{background:var(--surface-2);color:var(--fg)}
+.drawer-body{padding:18px 20px;overflow-y:auto;flex:1}
+.drawer-body .form-grid{grid-template-columns:1fr}
+.drawer-body .field{width:100%}
+.drawer-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex:none}
+.btn-new{display:inline-flex;align-items:center;gap:6px}
+
+/* ---- kanban ---- */
+.kanban{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px;align-items:flex-start}
+.kanban-col{flex:0 0 240px;background:var(--surface-2);border-radius:var(--radius);padding:10px}
+.kanban-col-head{display:flex;justify-content:space-between;align-items:baseline;padding:4px 6px 10px;font-size:12.5px;font-weight:700;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.03em}
+.kanban-col.dragover{outline:2px dashed var(--accent-2);outline-offset:2px}
+.kanban-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:grab;font-size:12.5px}
+.kanban-card:active{cursor:grabbing}
+.kanban-card .kc-title{font-weight:600;font-size:13px;margin-bottom:3px}
+.kanban-card .kc-meta{color:var(--fg-muted);font-size:11.5px}
+.kanban-card .kc-amount{margin-top:6px;font-weight:700;font-family:var(--font-mono);font-size:12.5px}
+.kanban-empty{font-size:12px;color:var(--fg-muted);font-style:italic;padding:4px 6px}
+
+/* ---- command palette ---- */
+.cmdk-backdrop{position:fixed;inset:0;background:rgba(12,18,16,.45);z-index:80;display:flex;align-items:flex-start;justify-content:center;padding-top:12vh}
+.cmdk-box{width:min(520px,90vw);background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.25);overflow:hidden}
+.cmdk-input{width:100%;border:none;border-bottom:1px solid var(--border);padding:16px 18px;font-size:15px;background:transparent;color:var(--fg)}
+.cmdk-input:focus{outline:none}
+.cmdk-results{max-height:360px;overflow-y:auto;padding:6px}
+.cmdk-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;font-size:13.5px;cursor:pointer}
+.cmdk-item svg{width:15px;height:15px;opacity:.7;flex:none}
+.cmdk-item.sel{background:var(--accent);color:#fff}
+.cmdk-item.sel svg{opacity:1}
+.cmdk-empty{padding:16px 14px;font-size:13px;color:var(--fg-muted)}
+
+/* ---- mini chart ---- */
+.chart-wrap{display:flex;align-items:flex-end;gap:10px;height:140px;padding:6px 4px}
+.chart-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.chart-bar{width:100%;max-width:38px;background:var(--accent);border-radius:5px 5px 0 0;min-height:2px}
+.chart-bar-label{font-size:10.5px;color:var(--fg-muted);text-transform:capitalize}
+.chart-bar-value{font-size:10.5px;color:var(--fg-muted);font-family:var(--font-mono)}
+
 [hidden]{display:none!important}
 
 @media (max-width: 760px){
@@ -137,6 +200,8 @@ tbody tr:hover{background:var(--surface-2)}
 </head>
 <body>
 <div id="root"></div>
+<div id="drawer-host"></div>
+<div id="cmdk-host"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -169,6 +234,107 @@ function echeancePill(dateStr, label){
   return `<span class="pill ${cls}">${esc(txt.trim())}</span>`;
 }
 
+// ---------- DRAWER (slide-over form panel) ----------
+function openDrawer(title, bodyHtml, mountFn){
+  state.drawer = { title, bodyHtml, mountFn };
+  renderDrawer();
+}
+function closeDrawer(){
+  state.drawer = null;
+  document.getElementById('drawer-host').innerHTML = '';
+}
+function renderDrawer(){
+  const host = document.getElementById('drawer-host');
+  if (!state.drawer){ host.innerHTML = ''; return; }
+  host.innerHTML = `
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
+    <div class="drawer-panel" role="dialog" aria-modal="true">
+      <div class="drawer-head"><h3>${esc(state.drawer.title)}</h3><button class="drawer-close" id="drawer-close" type="button">✕</button></div>
+      <div class="drawer-body">${state.drawer.bodyHtml}</div>
+    </div>`;
+  document.getElementById('drawer-backdrop').onclick = closeDrawer;
+  document.getElementById('drawer-close').onclick = closeDrawer;
+  if (state.drawer.mountFn) state.drawer.mountFn();
+}
+
+// ---------- SEARCH FILTER (client-side) ----------
+function filterRows(items, term, fields){
+  if (!term) return items;
+  const t = term.toLowerCase();
+  return items.filter(it => fields.some(f => String(it[f]||'').toLowerCase().includes(t)));
+}
+
+// ---------- ICONS ----------
+const ICONS = {
+  dashboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
+  config: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>',
+  planning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+  bibliotheque: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20V3H6.5A2.5 2.5 0 004 5.5v14z"/><path d="M4 19.5A2.5 2.5 0 006.5 22H20"/></svg>',
+  devis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>',
+  heures: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
+  stock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg>',
+  achats: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M1 1h4l2.3 12.4a2 2 0 002 1.6h9.8a2 2 0 002-1.6L23 6H6"/></svg>',
+  materiel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>',
+  clients: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>',
+  factures: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>',
+  rh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
+  soustraitance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="19" r="3"/><path d="M15 6.5L9 17.5"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>',
+};
+const NAV_GROUPS = [
+  { label: 'Vue d\'ensemble', items: ['dashboard'] },
+  { label: 'Commercial', items: ['devis','clients','factures'] },
+  { label: 'Opérations', items: ['planning','bibliotheque','heures','stock','achats','materiel'] },
+  { label: 'RH & partenaires', items: ['rh','soustraitance'] },
+  { label: 'Réglages', items: ['config'] },
+];
+
+// ---------- COMMAND PALETTE ----------
+function openCommandPalette(){
+  const host = document.getElementById('cmdk-host');
+  let sel = 0;
+  const renderList = (term) => {
+    const items = NAV.filter(n => !term || n.label.toLowerCase().includes(term.toLowerCase()));
+    sel = Math.min(sel, Math.max(items.length-1,0));
+    const list = host.querySelector('.cmdk-results');
+    list.innerHTML = items.length ? items.map((n,i) => `
+      <div class="cmdk-item${i===sel?' sel':''}" data-go="${n.id}">${ICONS[n.id]||''}<span>${esc(n.label)}</span></div>
+    `).join('') : `<div class="cmdk-empty">Aucun résultat.</div>`;
+    list.querySelectorAll('[data-go]').forEach(el => el.onclick = () => { go(el.dataset.go); });
+    return items;
+  };
+  const go = (id) => { state.view = id; closeCommandPalette(); renderShell(); };
+  host.innerHTML = `
+    <div class="cmdk-backdrop" id="cmdk-backdrop">
+      <div class="cmdk-box" onclick="event.stopPropagation()">
+        <input class="cmdk-input" id="cmdk-input" placeholder="Aller à… (Devis, Factures, Planning…)" autocomplete="off">
+        <div class="cmdk-results"></div>
+      </div>
+    </div>`;
+  let currentItems = renderList('');
+  document.getElementById('cmdk-backdrop').onclick = closeCommandPalette;
+  const input = document.getElementById('cmdk-input');
+  input.focus();
+  input.oninput = () => { currentItems = renderList(input.value); };
+  input.onkeydown = (e) => {
+    if (e.key === 'Escape'){ closeCommandPalette(); }
+    else if (e.key === 'ArrowDown'){ e.preventDefault(); sel = Math.min(sel+1, currentItems.length-1); currentItems = renderList(input.value); }
+    else if (e.key === 'ArrowUp'){ e.preventDefault(); sel = Math.max(sel-1, 0); currentItems = renderList(input.value); }
+    else if (e.key === 'Enter'){ e.preventDefault(); if (currentItems[sel]) go(currentItems[sel].id); }
+  };
+}
+function closeCommandPalette(){ document.getElementById('cmdk-host').innerHTML = ''; }
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'){
+    e.preventDefault();
+    if (document.getElementById('cmdk-host').innerHTML.trim()) closeCommandPalette();
+    else if (state.session) openCommandPalette();
+  } else if (e.key === 'Escape' && state.drawer && !document.getElementById('cmdk-host').innerHTML.trim()){
+    closeDrawer();
+  }
+});
+
 const state = {
   session: null,
   profil: null,
@@ -178,6 +344,8 @@ const state = {
   selectedDevisId: null,
   selectedFactureId: null,
   selectedCommandeId: null,
+  drawer: null,
+  devisView: 'kanban',
 };
 
 // ---------- AUTH ----------
@@ -319,11 +487,17 @@ const NAV = [
 ];
 
 function renderShell(){
+  const byId = Object.fromEntries(NAV.map(n => [n.id, n]));
   root.innerHTML = `
     <div class="app">
       <nav class="sidebar">
         <div class="brand"><div class="brand-mark">AE</div><div class="brand-name">Atelier ERP</div></div>
-        ${NAV.map(n => `<button class="nav-btn${state.view===n.id?' active':''}" data-nav="${n.id}">${n.label}</button>`).join('')}
+        <div class="nav-search-hint" id="nav-search-hint"><span>${ICONS.search}&nbsp; Rechercher…</span><kbd>Ctrl K</kbd></div>
+        ${NAV_GROUPS.map(g => `
+          <div class="nav-group">
+            <div class="nav-group-label">${esc(g.label)}</div>
+            ${g.items.map(id => { const n = byId[id]; return `<button class="nav-btn${state.view===id?' active':''}" data-nav="${id}">${ICONS[id]||''}<span>${esc(n.label)}</span></button>`; }).join('')}
+          </div>`).join('')}
         <div class="nav-spacer"></div>
         <div class="nav-foot">
           <div class="nav-ent">${esc(state.entreprise?.nom || '')}</div>
@@ -332,7 +506,8 @@ function renderShell(){
       </nav>
       <main class="main" id="main"></main>
     </div>`;
-  root.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { state.view = b.dataset.nav; renderView(); updateNavActive(); });
+  root.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { closeDrawer(); state.view = b.dataset.nav; renderView(); updateNavActive(); });
+  document.getElementById('nav-search-hint').onclick = () => openCommandPalette();
   document.getElementById('btn-logout').onclick = async () => { await sb.auth.signOut(); };
   renderView();
 }
@@ -349,13 +524,27 @@ async function renderView(){
 
 // ---------- DASHBOARD ----------
 async function viewDashboard(main){
-  const [{ data: d }, { data: rent }, { data: alertesMateriel }, { data: alertesHabilitations }] = await Promise.all([
+  const [{ data: d }, { data: rent }, { data: alertesMateriel }, { data: alertesHabilitations }, { data: facturesChart }] = await Promise.all([
     sb.from('v_dashboard').select('*').eq('entreprise_id', state.entreprise.id).maybeSingle(),
     sb.from('v_rentabilite').select('*').eq('entreprise_id', state.entreprise.id).order('numero_chantier'),
     sb.from('v_alertes_materiel').select('*').eq('entreprise_id', state.entreprise.id),
     sb.from('v_alertes_habilitations').select('*').eq('entreprise_id', state.entreprise.id),
+    sb.from('v_factures').select('date_emission,montant_ttc').eq('entreprise_id', state.entreprise.id),
   ]);
   const row = d || {};
+  const moisLabels = [];
+  const moisTotaux = {};
+  for (let i = 5; i >= 0; i--){
+    const dt2 = new Date(); dt2.setDate(1); dt2.setMonth(dt2.getMonth() - i);
+    const key = `${dt2.getFullYear()}-${String(dt2.getMonth()+1).padStart(2,'0')}`;
+    moisLabels.push({ key, label: dt2.toLocaleDateString('fr-FR',{month:'short'}) });
+    moisTotaux[key] = 0;
+  }
+  (facturesChart||[]).forEach(f => {
+    const key = (f.date_emission||'').slice(0,7);
+    if (key in moisTotaux) moisTotaux[key] += Number(f.montant_ttc||0);
+  });
+  const maxMois = Math.max(1, ...moisLabels.map(m => moisTotaux[m.key]));
   const alertes = [
     ...(alertesMateriel||[]).map(m => ({ label: `${m.nom} — ${m.date_prochain_controle && joursRestants(m.date_prochain_controle)<=30 ? 'contrôle' : 'assurance'}`, date: m.date_prochain_controle || m.date_prochaine_assurance })),
     ...(alertesHabilitations||[]).map(h => ({ label: `${h.employe_nom||'—'} — ${h.intitule}`, date: h.date_expiration })),
@@ -380,6 +569,17 @@ async function viewDashboard(main){
       ${kpi('Habilitations à renouveler', row.habilitations_alertes||0, '', (row.habilitations_alertes||0)>0?'warn':'good')}
       ${kpi('Commandes en attente', row.commandes_en_attente||0, '', (row.commandes_en_attente||0)>0?'warn':'good')}
       ${kpi('Sous-traitance à payer', money(row.sous_traitance_a_payer), '', (row.sous_traitance_a_payer||0)>0?'warn':'good')}
+    </div>
+    <div class="card">
+      <h3>CA facturé TTC — 6 derniers mois</h3>
+      <div class="chart-wrap">
+        ${moisLabels.map(m => { const v = moisTotaux[m.key]; const h = Math.max(2, Math.round(v / maxMois * 100)); return `
+          <div class="chart-bar-col">
+            <div class="chart-bar-value">${v ? money(v) : ''}</div>
+            <div class="chart-bar" style="height:${h}%"></div>
+            <div class="chart-bar-label">${esc(m.label)}</div>
+          </div>`; }).join('')}
+      </div>
     </div>
     ${alertes.length ? `
     <div class="card">
@@ -544,12 +744,10 @@ async function fetchBibliotheque(){
   const { data } = await sb.from('bibliotheque_taches').select('*').eq('entreprise_id', state.entreprise.id).order('code');
   return data || [];
 }
-async function viewBibliotheque(main){
-  const taches = await fetchBibliotheque();
-  main.innerHTML = `
-    <div class="view-head"><div><h1>Bibliothèque</h1><div class="view-sub">Catalogue des tâches types — le cœur réutilisable d'un chantier à l'autre.</div></div></div>
-    <div class="card">
-      <form id="form-tache" class="form-grid">
+function drawerTache(main){
+  openDrawer('Nouvelle tâche', `
+    <form id="form-tache">
+      <div class="form-grid">
         <div class="field"><label>Code</label><input name="code" required placeholder="T-01"></div>
         <div class="field"><label>Intitulé</label><input name="intitule" required></div>
         <div class="field"><label>Catégorie</label><input name="categorie"></div>
@@ -558,35 +756,49 @@ async function viewBibliotheque(main){
         <div class="field"><label>Consommable</label><input name="consommable"></div>
         <div class="field"><label>Qté conso / unité</label><input name="qte_consommable" type="number" step="0.1" value="0"></div>
         <div class="field"><label>Coût unit. conso (€)</label><input name="cout_unitaire_conso" type="number" step="0.1" value="0"></div>
-        <div class="field"><button class="btn btn-primary" type="submit">+ Ajouter</button></div>
-      </form>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="tache-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>`, () => {
+    document.getElementById('tache-cancel').onclick = closeDrawer;
+    document.getElementById('form-tache').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const { error } = await sb.from('bibliotheque_taches').insert({
+        entreprise_id: state.entreprise.id, code: fd.get('code'), intitule: fd.get('intitule'), categorie: fd.get('categorie'),
+        temps_unitaire: Number(fd.get('temps_unitaire')), unite: fd.get('unite'), consommable: fd.get('consommable'),
+        qte_consommable: Number(fd.get('qte_consommable')||0), cout_unitaire_conso: Number(fd.get('cout_unitaire_conso')||0),
+      });
+      if (error) return toast('Erreur : ' + error.message);
+      closeDrawer(); toast('Tâche ajoutée.'); viewBibliotheque(main);
+    };
+  });
+}
+async function viewBibliotheque(main, term){
+  const taches = await fetchBibliotheque();
+  const filtered = filterRows(taches, term, ['code','intitule','categorie']);
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Bibliothèque</h1><div class="view-sub">Catalogue des tâches types — le cœur réutilisable d'un chantier à l'autre.</div></div></div>
+    <div class="list-toolbar">
+      <input class="search-input" id="biblio-search" placeholder="Rechercher une tâche…" value="${esc(term||'')}">
+      <button class="btn btn-primary btn-new" id="biblio-new">${ICONS.plus} Nouvelle tâche</button>
     </div>
     <div class="card">
       <div class="table-wrap"><table>
         <thead><tr><th>Code</th><th>Intitulé</th><th>Catégorie</th><th class="num">Temps (h)</th><th>Unité</th><th>Consommable</th><th></th></tr></thead>
         <tbody>
-          ${taches.length ? taches.map(t => `
+          ${filtered.length ? filtered.map(t => `
             <tr>
               <td><span style="font-family:var(--font-mono);font-size:12px">${esc(t.code)}</span></td>
               <td>${esc(t.intitule)}</td><td>${esc(t.categorie||'—')}</td>
               <td class="num">${num(t.temps_unitaire)}</td><td>${esc(t.unite||'—')}</td>
               <td>${t.consommable ? esc(t.consommable) + ' (' + num(t.qte_consommable) + ' × ' + money(t.cout_unitaire_conso) + ')' : '—'}</td>
               <td><button class="btn btn-ghost btn-sm" data-del-tache="${t.id}">Retirer</button></td>
-            </tr>`).join('') : emptyRow(7,'Aucune tâche — ajoutez les tâches types du métier de ce client.')}
+            </tr>`).join('') : emptyRow(7, taches.length ? 'Aucun résultat.' : 'Aucune tâche — ajoutez les tâches types du métier de ce client.')}
         </tbody>
       </table></div>
     </div>`;
-  document.getElementById('form-tache').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const { error } = await sb.from('bibliotheque_taches').insert({
-      entreprise_id: state.entreprise.id, code: fd.get('code'), intitule: fd.get('intitule'), categorie: fd.get('categorie'),
-      temps_unitaire: Number(fd.get('temps_unitaire')), unite: fd.get('unite'), consommable: fd.get('consommable'),
-      qte_consommable: Number(fd.get('qte_consommable')||0), cout_unitaire_conso: Number(fd.get('cout_unitaire_conso')||0),
-    });
-    if (error) return toast('Erreur : ' + error.message);
-    toast('Tâche ajoutée.'); viewBibliotheque(main);
-  };
+  document.getElementById('biblio-new').onclick = () => drawerTache(main);
+  document.getElementById('biblio-search').oninput = (e) => viewBibliotheque(main, e.target.value);
   main.querySelectorAll('[data-del-tache]').forEach(b => b.onclick = async () => {
     const { error } = await sb.from('bibliotheque_taches').delete().eq('id', b.dataset.delTache);
     if (error) return toast('Erreur : ' + error.message);
@@ -595,21 +807,10 @@ async function viewBibliotheque(main){
 }
 
 // ---------- DEVIS ----------
-async function viewDevis(main){
-  const [{ data: devisList }, taches, { data: clients }] = await Promise.all([
-    sb.from('devis').select('*').eq('entreprise_id', state.entreprise.id).order('date', { ascending:false }),
-    fetchBibliotheque(),
-    sb.from('clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
-  ]);
-  const list = devisList || [];
-  if (!state.selectedDevisId && list.length) state.selectedDevisId = list[0].id;
-  const selected = list.find(d => d.id === state.selectedDevisId) || null;
-
-  main.innerHTML = `
-    <div class="view-head"><div><h1>Devis</h1><div class="view-sub">Un numéro de chantier par dossier — génère le prix de vente de référence.</div></div></div>
-    <div class="card">
-      <h3>Nouveau devis</h3>
-      <form id="form-devis" class="form-grid">
+function drawerDevis(main, list, clients){
+  openDrawer('Nouveau devis', `
+    <form id="form-devis">
+      <div class="form-grid">
         <div class="field"><label>N° chantier</label><input name="numero_chantier" required placeholder="CH-${String(list.length+1).padStart(3,'0')}"></div>
         <div class="field"><label>Client</label>
           <select name="client_id" id="devis-client-select">
@@ -621,13 +822,103 @@ async function viewDevis(main){
         <div class="field"><label>Date</label><input name="date" type="date" value="${todayISO()}"></div>
         <div class="field"><label>TVA (%)</label><input name="taux_tva" type="number" step="0.5" value="${state.entreprise.taux_tva}"></div>
         <div class="field"><label>Validité (jours)</label><input name="validite_jours" type="number" step="1" value="30"></div>
-        <div class="field"><button class="btn btn-primary" type="submit">Créer</button></div>
-      </form>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="devis-cancel">Annuler</button><button class="btn btn-primary" type="submit">Créer</button></div>
+    </form>`, () => {
+    document.getElementById('devis-cancel').onclick = closeDrawer;
+    document.getElementById('form-devis').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const clientId = fd.get('client_id') || null;
+      let clientNom = fd.get('client_nom') || null;
+      if (clientId) clientNom = (clients||[]).find(c=>c.id===clientId)?.nom || clientNom;
+      const { data: numero, error: numErr } = await sb.rpc('prochain_numero', { p_entreprise_id: state.entreprise.id, p_type: 'devis', p_prefixe: 'DE' });
+      if (numErr) return toast('Erreur numérotation : ' + numErr.message);
+      const { data, error } = await sb.from('devis').insert({
+        entreprise_id: state.entreprise.id, numero, numero_chantier: fd.get('numero_chantier'),
+        client_id: clientId, client_nom: clientNom, date: fd.get('date') || todayISO(),
+        taux_tva: Number(fd.get('taux_tva')||20), validite_jours: Number(fd.get('validite_jours')||30),
+      }).select().single();
+      if (error) return toast('Erreur : ' + error.message);
+      state.selectedDevisId = data.id; state.devisView = 'list';
+      closeDrawer(); toast('Devis créé.'); viewDevis(main);
+    };
+  });
+}
+
+const DEVIS_STATUTS = ['Devis envoye','Accepte','En cours','Termine'];
+const DEVIS_STATUT_LABELS = {'Devis envoye':'Devis envoyé','Accepte':'Accepté','En cours':'En cours','Termine':'Terminé'};
+
+async function viewDevis(main, term){
+  const [{ data: devisList }, taches, { data: clients }] = await Promise.all([
+    sb.from('devis').select('*').eq('entreprise_id', state.entreprise.id).order('date', { ascending:false }),
+    fetchBibliotheque(),
+    sb.from('clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
+  ]);
+  const list = devisList || [];
+  const filtered = filterRows(list, term, ['numero','numero_chantier','client_nom']);
+  if (!state.selectedDevisId && list.length) state.selectedDevisId = list[0].id;
+  const selected = list.find(d => d.id === state.selectedDevisId) || null;
+
+  main.innerHTML = `
+    <div class="view-head">
+      <div><h1>Devis</h1><div class="view-sub">Un numéro de chantier par dossier — génère le prix de vente de référence.</div></div>
+      <div class="view-actions">
+        <div class="segmented"><button data-devisview="kanban" class="${state.devisView==='kanban'?'active':''}">Kanban</button><button data-devisview="list" class="${state.devisView==='list'?'active':''}">Liste</button></div>
+      </div>
     </div>
-    <div class="two-pane">
+    <div class="list-toolbar">
+      <input class="search-input" id="devis-search" placeholder="Rechercher un devis, un client…" value="${esc(term||'')}">
+      <button class="btn btn-primary btn-new" id="devis-new">${ICONS.plus} Nouveau devis</button>
+    </div>
+    <div id="devis-body"></div>`;
+
+  document.getElementById('devis-new').onclick = () => drawerDevis(main, list, clients||[]);
+  document.getElementById('devis-search').oninput = (e) => viewDevis(main, e.target.value);
+  main.querySelectorAll('[data-devisview]').forEach(b => b.onclick = () => { state.devisView = b.dataset.devisview; viewDevis(main, term); });
+
+  const body = document.getElementById('devis-body');
+  if (state.devisView === 'kanban'){
+    const { data: lignes } = filtered.length ? await sb.from('devis_lignes').select('devis_id,total_ligne').in('devis_id', filtered.map(d=>d.id)) : { data: [] };
+    const totauxHT = {};
+    (lignes||[]).forEach(l => { totauxHT[l.devis_id] = (totauxHT[l.devis_id]||0) + Number(l.total_ligne||0); });
+    body.innerHTML = `<div class="kanban">
+      ${DEVIS_STATUTS.map(s => {
+        const cards = filtered.filter(d => (d.statut||'Devis envoye') === s);
+        return `<div class="kanban-col" data-col="${s}">
+          <div class="kanban-col-head"><span>${DEVIS_STATUT_LABELS[s]}</span><span>${cards.length}</span></div>
+          ${cards.length ? cards.map(d => {
+            const ht = totauxHT[d.id]||0; const ttc = ht * (1 + Number(d.taux_tva||0)/100);
+            return `<div class="kanban-card" draggable="true" data-card="${d.id}">
+              <div class="kc-title">${esc(d.numero||d.numero_chantier)}</div>
+              <div class="kc-meta">${esc(d.client_nom||'client ponctuel')} · ${esc(d.date)}</div>
+              <div class="kc-amount">${money(ttc)}</div>
+            </div>`;
+          }).join('') : `<div class="kanban-empty">Vide</div>`}
+        </div>`;
+      }).join('')}
+    </div>`;
+    body.querySelectorAll('[data-card]').forEach(card => {
+      card.ondragstart = (e) => { e.dataTransfer.setData('text/plain', card.dataset.card); };
+      card.onclick = () => { state.selectedDevisId = card.dataset.card; state.devisView = 'list'; viewDevis(main, term); };
+    });
+    body.querySelectorAll('[data-col]').forEach(col => {
+      col.ondragover = (e) => { e.preventDefault(); col.classList.add('dragover'); };
+      col.ondragleave = () => col.classList.remove('dragover');
+      col.ondrop = async (e) => {
+        e.preventDefault(); col.classList.remove('dragover');
+        const id = e.dataTransfer.getData('text/plain');
+        const nouveauStatut = col.dataset.col;
+        const { error } = await sb.from('devis').update({ statut: nouveauStatut }).eq('id', id);
+        if (error) return toast('Erreur : ' + error.message);
+        toast('Statut mis à jour.'); viewDevis(main, term);
+      };
+    });
+  } else {
+    body.innerHTML = `<div class="two-pane">
       <div class="pane-list">
         <h3 style="font-size:13px;margin-bottom:10px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.03em">Dossiers</h3>
-        ${list.length ? list.map(d => `
+        ${filtered.length ? filtered.map(d => `
           <div class="list-item${d.id===state.selectedDevisId?' active':''}">
             <button data-select-devis="${d.id}">
               <div><strong>${esc(d.numero||d.numero_chantier)}</strong></div>
@@ -637,27 +928,9 @@ async function viewDevis(main){
       </div>
       <div class="pane-detail" id="devis-detail"></div>
     </div>`;
-
-  document.getElementById('form-devis').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const clientId = fd.get('client_id') || null;
-    let clientNom = fd.get('client_nom') || null;
-    if (clientId) clientNom = (clients||[]).find(c=>c.id===clientId)?.nom || clientNom;
-    const { data: numero, error: numErr } = await sb.rpc('prochain_numero', { p_entreprise_id: state.entreprise.id, p_type: 'devis', p_prefixe: 'DE' });
-    if (numErr) return toast('Erreur numérotation : ' + numErr.message);
-    const { data, error } = await sb.from('devis').insert({
-      entreprise_id: state.entreprise.id, numero, numero_chantier: fd.get('numero_chantier'),
-      client_id: clientId, client_nom: clientNom, date: fd.get('date') || todayISO(),
-      taux_tva: Number(fd.get('taux_tva')||20), validite_jours: Number(fd.get('validite_jours')||30),
-    }).select().single();
-    if (error) return toast('Erreur : ' + error.message);
-    state.selectedDevisId = data.id;
-    toast('Devis créé.'); viewDevis(main);
-  };
-  main.querySelectorAll('[data-select-devis]').forEach(b => b.onclick = () => { state.selectedDevisId = b.dataset.selectDevis; viewDevis(main); });
-
-  if (selected) await renderDevisDetail(selected, taches);
+    body.querySelectorAll('[data-select-devis]').forEach(b => b.onclick = () => { state.selectedDevisId = b.dataset.selectDevis; viewDevis(main, term); });
+    if (selected) await renderDevisDetail(selected, taches);
+  }
 }
 
 async function renderDevisDetail(devis, taches){
@@ -825,12 +1098,10 @@ async function viewHeures(main){
 }
 
 // ---------- STOCK ----------
-async function viewStock(main){
-  const { data: stock } = await sb.from('stock').select('*').eq('entreprise_id', state.entreprise.id).order('designation');
-  main.innerHTML = `
-    <div class="view-head"><div><h1>Stock</h1><div class="view-sub">Consommables avec seuil d'alerte.</div></div></div>
-    <div class="card">
-      <form id="form-stock" class="form-grid">
+function drawerStock(main){
+  openDrawer('Nouvel article', `
+    <form id="form-stock">
+      <div class="form-grid">
         <div class="field"><label>Référence</label><input name="reference"></div>
         <div class="field"><label>Désignation</label><input name="designation" required></div>
         <div class="field"><label>Catégorie</label><input name="categorie"></div>
@@ -839,34 +1110,48 @@ async function viewStock(main){
         <div class="field"><label>Unité</label><input name="unite"></div>
         <div class="field"><label>Coût unitaire (€)</label><input name="cout_unitaire" type="number" step="0.1" value="0"></div>
         <div class="field"><label>Fournisseur</label><input name="fournisseur"></div>
-        <div class="field"><button class="btn btn-primary" type="submit">+ Ajouter</button></div>
-      </form>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="stock-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>`, () => {
+    document.getElementById('stock-cancel').onclick = closeDrawer;
+    document.getElementById('form-stock').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const { error } = await sb.from('stock').insert({
+        entreprise_id: state.entreprise.id, reference: fd.get('reference'), designation: fd.get('designation'),
+        categorie: fd.get('categorie'), quantite: Number(fd.get('quantite')), seuil_alerte: Number(fd.get('seuil_alerte')),
+        unite: fd.get('unite'), cout_unitaire: Number(fd.get('cout_unitaire')||0), fournisseur: fd.get('fournisseur'),
+      });
+      if (error) return toast('Erreur : ' + error.message);
+      closeDrawer(); toast('Article ajouté.'); viewStock(main);
+    };
+  });
+}
+async function viewStock(main, term){
+  const { data: stock } = await sb.from('stock').select('*').eq('entreprise_id', state.entreprise.id).order('designation');
+  const filtered = filterRows(stock||[], term, ['reference','designation','categorie','fournisseur']);
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Stock</h1><div class="view-sub">Consommables avec seuil d'alerte.</div></div></div>
+    <div class="list-toolbar">
+      <input class="search-input" id="stock-search" placeholder="Rechercher un article…" value="${esc(term||'')}">
+      <button class="btn btn-primary btn-new" id="stock-new">${ICONS.plus} Nouvel article</button>
     </div>
     <div class="card">
       <div class="table-wrap"><table>
         <thead><tr><th>Référence</th><th>Désignation</th><th>Catégorie</th><th class="num">Qté</th><th class="num">Seuil</th><th>Statut</th><th></th></tr></thead>
         <tbody>
-          ${(stock&&stock.length) ? stock.map(s => `
+          ${filtered.length ? filtered.map(s => `
             <tr>
               <td>${esc(s.reference||'—')}</td><td>${esc(s.designation)}</td><td>${esc(s.categorie||'—')}</td>
               <td class="num">${num(s.quantite)}</td><td class="num">${num(s.seuil_alerte)}</td>
               <td>${Number(s.quantite) <= Number(s.seuil_alerte) ? '<span class="pill pill-bad">À commander</span>' : '<span class="pill pill-ok">OK</span>'}</td>
               <td><button class="btn btn-ghost btn-sm" data-del-stock="${s.id}">Retirer</button></td>
-            </tr>`).join('') : emptyRow(7,'Aucun article en stock.')}
+            </tr>`).join('') : emptyRow(7, (stock&&stock.length) ? 'Aucun résultat.' : 'Aucun article en stock.')}
         </tbody>
       </table></div>
     </div>`;
-  document.getElementById('form-stock').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const { error } = await sb.from('stock').insert({
-      entreprise_id: state.entreprise.id, reference: fd.get('reference'), designation: fd.get('designation'),
-      categorie: fd.get('categorie'), quantite: Number(fd.get('quantite')), seuil_alerte: Number(fd.get('seuil_alerte')),
-      unite: fd.get('unite'), cout_unitaire: Number(fd.get('cout_unitaire')||0), fournisseur: fd.get('fournisseur'),
-    });
-    if (error) return toast('Erreur : ' + error.message);
-    toast('Article ajouté.'); viewStock(main);
-  };
+  document.getElementById('stock-new').onclick = () => drawerStock(main);
+  document.getElementById('stock-search').oninput = (e) => viewStock(main, e.target.value);
   main.querySelectorAll('[data-del-stock]').forEach(b => b.onclick = async () => {
     const { error } = await sb.from('stock').delete().eq('id', b.dataset.delStock);
     if (error) return toast('Erreur : ' + error.message);
@@ -875,60 +1160,61 @@ async function viewStock(main){
 }
 
 // ---------- CLIENTS ----------
-async function viewClients(main){
-  const { data: clients } = await sb.from('v_clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom');
-  main.innerHTML = `
-    <div class="view-head"><div><h1>Clients</h1><div class="view-sub">CA total et nombre de devis calculés automatiquement.</div></div></div>
-    <div class="card">
-      <form id="form-client" class="form-grid">
+function drawerClient(main){
+  openDrawer('Nouveau client', `
+    <form id="form-client">
+      <div class="form-grid">
         <div class="field"><label>Nom</label><input name="nom" required></div>
         <div class="field"><label>Contact</label><input name="contact"></div>
         <div class="field"><label>Téléphone</label><input name="telephone"></div>
         <div class="field"><label>Email</label><input name="email" type="email"></div>
         <div class="field"><label>Adresse</label><input name="adresse"></div>
-        <div class="field"><button class="btn btn-primary" type="submit">+ Ajouter</button></div>
-      </form>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="client-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>`, () => {
+    document.getElementById('client-cancel').onclick = closeDrawer;
+    document.getElementById('form-client').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const { error } = await sb.from('clients').insert({
+        entreprise_id: state.entreprise.id, nom: fd.get('nom'), contact: fd.get('contact'),
+        telephone: fd.get('telephone'), email: fd.get('email'), adresse: fd.get('adresse'),
+      });
+      if (error) return toast('Erreur : ' + error.message);
+      closeDrawer(); toast('Client ajouté.'); viewClients(main);
+    };
+  });
+}
+async function viewClients(main, term){
+  const { data: clients } = await sb.from('v_clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom');
+  const filtered = filterRows(clients||[], term, ['nom','contact','telephone','email']);
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Clients</h1><div class="view-sub">CA total et nombre de devis calculés automatiquement.</div></div></div>
+    <div class="list-toolbar">
+      <input class="search-input" id="clients-search" placeholder="Rechercher un client…" value="${esc(term||'')}">
+      <button class="btn btn-primary btn-new" id="clients-new">${ICONS.plus} Nouveau client</button>
     </div>
     <div class="card">
       <div class="table-wrap"><table>
         <thead><tr><th>Nom</th><th>Contact</th><th>Téléphone</th><th class="num">CA total</th><th class="num">Nb devis</th><th>Dernier devis</th></tr></thead>
         <tbody>
-          ${(clients&&clients.length) ? clients.map(c => `
+          ${filtered.length ? filtered.map(c => `
             <tr>
               <td>${esc(c.nom)}</td><td>${esc(c.contact||'—')}</td><td>${esc(c.telephone||'—')}</td>
               <td class="num">${money(c.ca_total)}</td><td class="num">${c.nb_devis||0}</td><td>${esc(c.dernier_devis||'—')}</td>
-            </tr>`).join('') : emptyRow(6,'Aucun client enregistré.')}
+            </tr>`).join('') : emptyRow(6, (clients&&clients.length) ? 'Aucun résultat.' : 'Aucun client enregistré.')}
         </tbody>
       </table></div>
     </div>`;
-  document.getElementById('form-client').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const { error } = await sb.from('clients').insert({
-      entreprise_id: state.entreprise.id, nom: fd.get('nom'), contact: fd.get('contact'),
-      telephone: fd.get('telephone'), email: fd.get('email'), adresse: fd.get('adresse'),
-    });
-    if (error) return toast('Erreur : ' + error.message);
-    toast('Client ajouté.'); viewClients(main);
-  };
+  document.getElementById('clients-new').onclick = () => drawerClient(main);
+  document.getElementById('clients-search').oninput = (e) => viewClients(main, e.target.value);
 }
 
 // ---------- FACTURES ----------
-async function viewFactures(main){
-  const [{ data: factures }, { data: clients }, { data: devisList }] = await Promise.all([
-    sb.from('v_factures').select('*').eq('entreprise_id', state.entreprise.id).order('date_emission', { ascending:false }),
-    sb.from('clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
-    sb.from('devis').select('*').eq('entreprise_id', state.entreprise.id).order('date', { ascending:false }),
-  ]);
-  const list = factures || [];
-  if (!state.selectedFactureId && list.length) state.selectedFactureId = list[0].id;
-  const selected = list.find(f => f.id === state.selectedFactureId) || null;
-
-  main.innerHTML = `
-    <div class="view-head"><div><h1>Factures</h1><div class="view-sub">Numérotation légale séquentielle, lignes détaillées, acompte/solde, avoirs.</div></div></div>
-    <div class="card">
-      <h3>Nouvelle facture</h3>
-      <form id="form-facture" class="form-grid">
+function drawerFacture(main, devisList, clients){
+  openDrawer('Nouvelle facture', `
+    <form id="form-facture">
+      <div class="form-grid">
         <div class="field"><label>Depuis un devis (optionnel)</label>
           <select name="devis_id" id="facture-devis-select">
             <option value="">— Facture manuelle —</option>
@@ -944,24 +1230,10 @@ async function viewFactures(main){
         </div>
         <div class="field"><label>Date émission</label><input name="date_emission" type="date" value="${todayISO()}"></div>
         <div class="field"><label>Date échéance</label><input name="date_echeance" type="date"></div>
-        <div class="field"><button class="btn btn-primary" type="submit">+ Émettre</button></div>
-      </form>
-    </div>
-    <div class="two-pane">
-      <div class="pane-list">
-        <h3 style="font-size:13px;margin-bottom:10px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.03em">Factures</h3>
-        ${list.length ? list.map(f => `
-          <div class="list-item${f.id===state.selectedFactureId?' active':''}">
-            <button data-select-facture="${f.id}">
-              <div><strong>${esc(f.numero_facture)}</strong> ${f.type==='Avoir'?'<span class="pill pill-bad">Avoir</span>':''}</div>
-              <div class="meta">${esc(f.client_nom||'—')} · ${money(f.montant_ttc)} · ${factureStatutPill(f.statut)}</div>
-            </button>
-          </div>`).join('') : `<div class="meta">Aucune facture.</div>`}
       </div>
-      <div class="pane-detail" id="facture-detail"></div>
-    </div>`;
-
-  const devisSelect = document.getElementById('facture-devis-select');
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="facture-cancel">Annuler</button><button class="btn btn-primary" type="submit">Émettre</button></div>
+    </form>`, () => {
+  document.getElementById('facture-cancel').onclick = closeDrawer;
   const typeSelect = document.querySelector('#form-facture select[name="type"]');
   const pctField = document.getElementById('facture-pct-field');
   const syncPctVisible = () => { pctField.hidden = typeSelect.value !== 'Acompte'; };
@@ -1019,9 +1291,45 @@ async function viewFactures(main){
       if (lignesErr) toast('Facture créée, erreur lignes : ' + lignesErr.message);
     }
     state.selectedFactureId = facture.id;
-    toast('Facture émise.'); viewFactures(main);
+    closeDrawer(); toast('Facture émise.'); viewFactures(main);
   };
-  main.querySelectorAll('[data-select-facture]').forEach(b => b.onclick = () => { state.selectedFactureId = b.dataset.selectFacture; viewFactures(main); });
+  });
+}
+
+async function viewFactures(main, term){
+  const [{ data: factures }, { data: clients }, { data: devisList }] = await Promise.all([
+    sb.from('v_factures').select('*').eq('entreprise_id', state.entreprise.id).order('date_emission', { ascending:false }),
+    sb.from('clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
+    sb.from('devis').select('*').eq('entreprise_id', state.entreprise.id).order('date', { ascending:false }),
+  ]);
+  const list = factures || [];
+  const filtered = filterRows(list, term, ['numero_facture','client_nom','numero_chantier']);
+  if (!state.selectedFactureId && list.length) state.selectedFactureId = list[0].id;
+  const selected = list.find(f => f.id === state.selectedFactureId) || null;
+
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Factures</h1><div class="view-sub">Numérotation légale séquentielle, lignes détaillées, acompte/solde, avoirs.</div></div></div>
+    <div class="list-toolbar">
+      <input class="search-input" id="factures-search" placeholder="Rechercher une facture, un client…" value="${esc(term||'')}">
+      <button class="btn btn-primary btn-new" id="factures-new">${ICONS.plus} Nouvelle facture</button>
+    </div>
+    <div class="two-pane">
+      <div class="pane-list">
+        <h3 style="font-size:13px;margin-bottom:10px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.03em">Factures</h3>
+        ${filtered.length ? filtered.map(f => `
+          <div class="list-item${f.id===state.selectedFactureId?' active':''}">
+            <button data-select-facture="${f.id}">
+              <div><strong>${esc(f.numero_facture)}</strong> ${f.type==='Avoir'?'<span class="pill pill-bad">Avoir</span>':''}</div>
+              <div class="meta">${esc(f.client_nom||'—')} · ${money(f.montant_ttc)} · ${factureStatutPill(f.statut)}</div>
+            </button>
+          </div>`).join('') : `<div class="meta">${list.length?'Aucun résultat.':'Aucune facture.'}</div>`}
+      </div>
+      <div class="pane-detail" id="facture-detail"></div>
+    </div>`;
+
+  document.getElementById('factures-new').onclick = () => drawerFacture(main, devisList||[], clients||[]);
+  document.getElementById('factures-search').oninput = (e) => viewFactures(main, e.target.value);
+  main.querySelectorAll('[data-select-facture]').forEach(b => b.onclick = () => { state.selectedFactureId = b.dataset.selectFacture; viewFactures(main, term); });
 
   if (selected) await renderFactureDetail(selected);
 }
@@ -1191,76 +1499,95 @@ function interventionStatutPill(s){
 }
 
 // ---------- ACHATS & FOURNISSEURS ----------
-async function viewAchats(main){
+function drawerFournisseur(main){
+  openDrawer('Nouveau fournisseur', `
+    <form id="form-fournisseur">
+      <div class="form-grid">
+        <div class="field"><label>Nom</label><input name="nom" required></div>
+        <div class="field"><label>Contact</label><input name="contact"></div>
+        <div class="field"><label>Téléphone</label><input name="telephone"></div>
+        <div class="field"><label>Email</label><input name="email" type="email"></div>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="fournisseur-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>`, () => {
+    document.getElementById('fournisseur-cancel').onclick = closeDrawer;
+    document.getElementById('form-fournisseur').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const { error } = await sb.from('fournisseurs').insert({ entreprise_id: state.entreprise.id, nom: fd.get('nom'), contact: fd.get('contact'), telephone: fd.get('telephone'), email: fd.get('email') });
+      if (error) return toast('Erreur : ' + error.message);
+      closeDrawer(); toast('Fournisseur ajouté.'); viewAchats(main);
+    };
+  });
+}
+function drawerCommande(main, fournisseurs){
+  openDrawer('Nouveau bon de commande', `
+    <form id="form-commande">
+      <div class="form-grid">
+        <div class="field"><label>Fournisseur</label>
+          <select name="fournisseur_id" required><option value="">—</option>${(fournisseurs||[]).map(f=>`<option value="${f.id}">${esc(f.nom)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Date</label><input name="date_commande" type="date" value="${todayISO()}"></div>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="commande-cancel">Annuler</button><button class="btn btn-primary" type="submit">Créer le bon</button></div>
+    </form>`, () => {
+    document.getElementById('commande-cancel').onclick = closeDrawer;
+    document.getElementById('form-commande').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const four = (fournisseurs||[]).find(f=>f.id===fd.get('fournisseur_id'));
+      const { data: numero, error: numErr } = await sb.rpc('prochain_numero', { p_entreprise_id: state.entreprise.id, p_type: 'commande', p_prefixe: 'BC' });
+      if (numErr) return toast('Erreur numérotation : ' + numErr.message);
+      const { data, error } = await sb.from('commandes_fournisseurs').insert({
+        entreprise_id: state.entreprise.id, numero, fournisseur_id: four?.id||null, fournisseur_nom: four?.nom||null, date_commande: fd.get('date_commande')||todayISO(),
+      }).select().single();
+      if (error) return toast('Erreur : ' + error.message);
+      state.selectedCommandeId = data.id;
+      closeDrawer(); toast('Bon de commande créé.'); viewAchats(main);
+    };
+  });
+}
+async function viewAchats(main, term){
   const [{ data: fournisseurs }, { data: commandes }, { data: stockItems }] = await Promise.all([
     sb.from('fournisseurs').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
     sb.from('commandes_fournisseurs').select('*').eq('entreprise_id', state.entreprise.id).order('date_commande', { ascending:false }),
     sb.from('stock').select('*').eq('entreprise_id', state.entreprise.id).order('designation'),
   ]);
+  const filteredCommandes = filterRows(commandes||[], term, ['numero','fournisseur_nom']);
   if (!state.selectedCommandeId && commandes && commandes.length) state.selectedCommandeId = commandes[0].id;
   const selected = (commandes||[]).find(c => c.id === state.selectedCommandeId) || null;
 
   main.innerHTML = `
     <div class="view-head"><div><h1>Achats & fournisseurs</h1><div class="view-sub">Bons de commande liés au stock — réception = entrée de stock automatique.</div></div></div>
     <div class="card">
-      <div class="card-row"><h3 style="margin:0">Fournisseurs</h3></div>
-      <form id="form-fournisseur" class="form-grid" style="margin-bottom:14px">
-        <div class="field"><label>Nom</label><input name="nom" required></div>
-        <div class="field"><label>Contact</label><input name="contact"></div>
-        <div class="field"><label>Téléphone</label><input name="telephone"></div>
-        <div class="field"><label>Email</label><input name="email" type="email"></div>
-        <div class="field"><button class="btn btn-ghost" type="submit">+ Ajouter</button></div>
-      </form>
+      <div class="card-row"><h3 style="margin:0">Fournisseurs</h3><button class="btn btn-ghost btn-sm btn-new" id="fournisseur-new">${ICONS.plus} Nouveau</button></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Nom</th><th>Contact</th><th>Téléphone</th><th>Email</th></tr></thead>
         <tbody>${(fournisseurs&&fournisseurs.length) ? fournisseurs.map(f=>`<tr><td>${esc(f.nom)}</td><td>${esc(f.contact||'—')}</td><td>${esc(f.telephone||'—')}</td><td>${esc(f.email||'—')}</td></tr>`).join('') : emptyRow(4,'Aucun fournisseur.')}</tbody>
       </table></div>
     </div>
-    <div class="card">
-      <h3>Nouveau bon de commande</h3>
-      <form id="form-commande" class="form-grid">
-        <div class="field"><label>Fournisseur</label>
-          <select name="fournisseur_id" required><option value="">—</option>${(fournisseurs||[]).map(f=>`<option value="${f.id}">${esc(f.nom)}</option>`).join('')}</select>
-        </div>
-        <div class="field"><label>Date</label><input name="date_commande" type="date" value="${todayISO()}"></div>
-        <div class="field"><button class="btn btn-primary" type="submit">+ Créer le bon</button></div>
-      </form>
+    <div class="list-toolbar">
+      <input class="search-input" id="commandes-search" placeholder="Rechercher un bon de commande…" value="${esc(term||'')}">
+      <button class="btn btn-primary btn-new" id="commande-new">${ICONS.plus} Nouveau bon de commande</button>
     </div>
     <div class="two-pane">
       <div class="pane-list">
         <h3 style="font-size:13px;margin-bottom:10px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.03em">Bons de commande</h3>
-        ${(commandes&&commandes.length) ? commandes.map(c => `
+        ${filteredCommandes.length ? filteredCommandes.map(c => `
           <div class="list-item${c.id===state.selectedCommandeId?' active':''}">
             <button data-select-commande="${c.id}">
               <div><strong>${esc(c.numero||'BC')}</strong></div>
               <div class="meta">${esc(c.fournisseur_nom||'—')} · ${esc(c.date_commande)} · ${esc(c.statut)}</div>
             </button>
-          </div>`).join('') : `<div class="meta">Aucun bon de commande.</div>`}
+          </div>`).join('') : `<div class="meta">${(commandes&&commandes.length)?'Aucun résultat.':'Aucun bon de commande.'}</div>`}
       </div>
       <div class="pane-detail" id="commande-detail"></div>
     </div>`;
 
-  document.getElementById('form-fournisseur').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const { error } = await sb.from('fournisseurs').insert({ entreprise_id: state.entreprise.id, nom: fd.get('nom'), contact: fd.get('contact'), telephone: fd.get('telephone'), email: fd.get('email') });
-    if (error) return toast('Erreur : ' + error.message);
-    toast('Fournisseur ajouté.'); viewAchats(main);
-  };
-  document.getElementById('form-commande').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const four = (fournisseurs||[]).find(f=>f.id===fd.get('fournisseur_id'));
-    const { data: numero, error: numErr } = await sb.rpc('prochain_numero', { p_entreprise_id: state.entreprise.id, p_type: 'commande', p_prefixe: 'BC' });
-    if (numErr) return toast('Erreur numérotation : ' + numErr.message);
-    const { data, error } = await sb.from('commandes_fournisseurs').insert({
-      entreprise_id: state.entreprise.id, numero, fournisseur_id: four?.id||null, fournisseur_nom: four?.nom||null, date_commande: fd.get('date_commande')||todayISO(),
-    }).select().single();
-    if (error) return toast('Erreur : ' + error.message);
-    state.selectedCommandeId = data.id;
-    toast('Bon de commande créé.'); viewAchats(main);
-  };
-  main.querySelectorAll('[data-select-commande]').forEach(b => b.onclick = () => { state.selectedCommandeId = b.dataset.selectCommande; viewAchats(main); });
+  document.getElementById('fournisseur-new').onclick = () => drawerFournisseur(main);
+  document.getElementById('commande-new').onclick = () => drawerCommande(main, fournisseurs||[]);
+  document.getElementById('commandes-search').oninput = (e) => viewAchats(main, e.target.value);
+  main.querySelectorAll('[data-select-commande]').forEach(b => b.onclick = () => { state.selectedCommandeId = b.dataset.selectCommande; viewAchats(main, term); });
   if (selected) await renderCommandeDetail(selected, stockItems||[]);
 }
 
@@ -1328,15 +1655,10 @@ async function renderCommandeDetail(commande, stockItems){
 }
 
 // ---------- MATERIEL & VEHICULES ----------
-async function viewMateriel(main){
-  const [{ data: materiel }, { data: employes }] = await Promise.all([
-    sb.from('materiel').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
-    sb.from('employes').select('*').eq('entreprise_id', state.entreprise.id).eq('actif', true).order('nom'),
-  ]);
-  main.innerHTML = `
-    <div class="view-head"><div><h1>Matériel & véhicules</h1><div class="view-sub">Outillage et véhicules — affectation, contrôles et assurances à échéance.</div></div></div>
-    <div class="card">
-      <form id="form-materiel" class="form-grid">
+function drawerMateriel(main, employes){
+  openDrawer('Nouveau matériel / véhicule', `
+    <form id="form-materiel">
+      <div class="form-grid">
         <div class="field"><label>Nom</label><input name="nom" required></div>
         <div class="field"><label>Type</label><select name="type"><option>Outillage</option><option>Vehicule</option></select></div>
         <div class="field"><label>Immatriculation</label><input name="immatriculation"></div>
@@ -1345,36 +1667,53 @@ async function viewMateriel(main){
         <div class="field"><label>Affecté au chantier</label><input name="affecte_a_chantier"></div>
         <div class="field"><label>Prochain contrôle</label><input name="date_prochain_controle" type="date"></div>
         <div class="field"><label>Prochaine assurance</label><input name="date_prochaine_assurance" type="date"></div>
-        <div class="field"><button class="btn btn-primary" type="submit">+ Ajouter</button></div>
-      </form>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="materiel-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>`, () => {
+    document.getElementById('materiel-cancel').onclick = closeDrawer;
+    document.getElementById('form-materiel').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const { error } = await sb.from('materiel').insert({
+        entreprise_id: state.entreprise.id, nom: fd.get('nom'), type: fd.get('type'),
+        immatriculation: fd.get('immatriculation')||null, numero_serie: fd.get('numero_serie')||null,
+        affecte_a_employe_id: fd.get('affecte_a_employe_id')||null, affecte_a_chantier: fd.get('affecte_a_chantier')||null,
+        date_prochain_controle: fd.get('date_prochain_controle')||null, date_prochaine_assurance: fd.get('date_prochaine_assurance')||null,
+      });
+      if (error) return toast('Erreur : ' + error.message);
+      closeDrawer(); toast('Matériel ajouté.'); viewMateriel(main);
+    };
+  });
+}
+async function viewMateriel(main, term){
+  const [{ data: materiel }, { data: employes }] = await Promise.all([
+    sb.from('materiel').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
+    sb.from('employes').select('*').eq('entreprise_id', state.entreprise.id).eq('actif', true).order('nom'),
+  ]);
+  const filtered = filterRows(materiel||[], term, ['nom','type','immatriculation','numero_serie','affecte_a_chantier']);
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Matériel & véhicules</h1><div class="view-sub">Outillage et véhicules — affectation, contrôles et assurances à échéance.</div></div></div>
+    <div class="list-toolbar">
+      <input class="search-input" id="materiel-search" placeholder="Rechercher…" value="${esc(term||'')}">
+      <button class="btn btn-primary btn-new" id="materiel-new">${ICONS.plus} Nouveau</button>
     </div>
     <div class="card">
       <div class="table-wrap"><table>
         <thead><tr><th>Nom</th><th>Type</th><th>Immat. / série</th><th>Affectation</th><th>Contrôle</th><th>Assurance</th><th></th></tr></thead>
         <tbody>
-          ${(materiel&&materiel.length) ? materiel.map(m => `
+          ${filtered.length ? filtered.map(m => `
             <tr>
               <td>${esc(m.nom)}</td><td>${esc(m.type)}</td><td>${esc(m.immatriculation||m.numero_serie||'—')}</td>
               <td>${esc(m.affecte_a_chantier||'—')}</td>
               <td>${echeancePill(m.date_prochain_controle, 'Contrôle')}</td>
               <td>${echeancePill(m.date_prochaine_assurance, 'Assurance')}</td>
               <td><button class="btn btn-ghost btn-sm" data-del-materiel="${m.id}">Retirer</button></td>
-            </tr>`).join('') : emptyRow(7,'Aucun matériel ou véhicule enregistré.')}
+            </tr>`).join('') : emptyRow(7, (materiel&&materiel.length) ? 'Aucun résultat.' : 'Aucun matériel ou véhicule enregistré.')}
         </tbody>
       </table></div>
     </div>`;
-  document.getElementById('form-materiel').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const { error } = await sb.from('materiel').insert({
-      entreprise_id: state.entreprise.id, nom: fd.get('nom'), type: fd.get('type'),
-      immatriculation: fd.get('immatriculation')||null, numero_serie: fd.get('numero_serie')||null,
-      affecte_a_employe_id: fd.get('affecte_a_employe_id')||null, affecte_a_chantier: fd.get('affecte_a_chantier')||null,
-      date_prochain_controle: fd.get('date_prochain_controle')||null, date_prochaine_assurance: fd.get('date_prochaine_assurance')||null,
-    });
-    if (error) return toast('Erreur : ' + error.message);
-    toast('Matériel ajouté.'); viewMateriel(main);
-  };
+  document.getElementById('materiel-new').onclick = () => drawerMateriel(main, employes||[]);
+  document.getElementById('materiel-search').oninput = (e) => viewMateriel(main, e.target.value);
   main.querySelectorAll('[data-del-materiel]').forEach(b => b.onclick = async () => {
     await sb.from('materiel').delete().eq('id', b.dataset.delMateriel);
     toast('Matériel retiré.'); viewMateriel(main);
@@ -1382,6 +1721,50 @@ async function viewMateriel(main){
 }
 
 // ---------- RH ETENDU (conges + habilitations) ----------
+function drawerConge(main, employes){
+  openDrawer('Nouveau congé / absence', `
+    <form id="form-conge">
+      <div class="form-grid">
+        <div class="field"><label>Salarié</label><select name="employe_id" required><option value="">—</option>${(employes||[]).map(e=>`<option value="${e.id}">${esc(e.nom)}</option>`).join('')}</select></div>
+        <div class="field"><label>Type</label><select name="type"><option>Conges payes</option><option>RTT</option><option>Maladie</option><option>Sans solde</option></select></div>
+        <div class="field"><label>Début</label><input name="date_debut" type="date" required></div>
+        <div class="field"><label>Fin</label><input name="date_fin" type="date" required></div>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="conge-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>`, () => {
+    document.getElementById('conge-cancel').onclick = closeDrawer;
+    document.getElementById('form-conge').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const emp = (employes||[]).find(x=>x.id===fd.get('employe_id'));
+      const { error } = await sb.from('conges').insert({ entreprise_id: state.entreprise.id, employe_id: emp?.id, employe_nom: emp?.nom, type: fd.get('type'), date_debut: fd.get('date_debut'), date_fin: fd.get('date_fin') });
+      if (error) return toast('Erreur : ' + error.message);
+      closeDrawer(); toast('Congé ajouté.'); viewRH(main);
+    };
+  });
+}
+function drawerHabilitation(main, employes){
+  openDrawer('Nouvelle habilitation', `
+    <form id="form-habilitation">
+      <div class="form-grid">
+        <div class="field"><label>Salarié</label><select name="employe_id" required><option value="">—</option>${(employes||[]).map(e=>`<option value="${e.id}">${esc(e.nom)}</option>`).join('')}</select></div>
+        <div class="field"><label>Intitulé</label><input name="intitule" required placeholder="CACES, habilitation électrique…"></div>
+        <div class="field"><label>Obtention</label><input name="date_obtention" type="date"></div>
+        <div class="field"><label>Expiration</label><input name="date_expiration" type="date"></div>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="habilitation-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>`, () => {
+    document.getElementById('habilitation-cancel').onclick = closeDrawer;
+    document.getElementById('form-habilitation').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const emp = (employes||[]).find(x=>x.id===fd.get('employe_id'));
+      const { error } = await sb.from('habilitations').insert({ entreprise_id: state.entreprise.id, employe_id: emp?.id, employe_nom: emp?.nom, intitule: fd.get('intitule'), date_obtention: fd.get('date_obtention')||null, date_expiration: fd.get('date_expiration')||null });
+      if (error) return toast('Erreur : ' + error.message);
+      closeDrawer(); toast('Habilitation ajoutée.'); viewRH(main);
+    };
+  });
+}
 async function viewRH(main){
   const [{ data: employes }, { data: conges }, { data: habilitations }] = await Promise.all([
     sb.from('employes').select('*').eq('entreprise_id', state.entreprise.id).eq('actif', true).order('nom'),
@@ -1391,52 +1774,66 @@ async function viewRH(main){
   main.innerHTML = `
     <div class="view-head"><div><h1>RH</h1><div class="view-sub">Congés/absences et habilitations — alerte automatique à 30 jours de l'expiration.</div></div></div>
     <div class="card">
-      <h3>Congés & absences</h3>
-      <form id="form-conge" class="form-grid" style="margin-bottom:14px">
-        <div class="field"><label>Salarié</label><select name="employe_id" required><option value="">—</option>${(employes||[]).map(e=>`<option value="${e.id}">${esc(e.nom)}</option>`).join('')}</select></div>
-        <div class="field"><label>Type</label><select name="type"><option>Conges payes</option><option>RTT</option><option>Maladie</option><option>Sans solde</option></select></div>
-        <div class="field"><label>Début</label><input name="date_debut" type="date" required></div>
-        <div class="field"><label>Fin</label><input name="date_fin" type="date" required></div>
-        <div class="field"><button class="btn btn-ghost" type="submit">+ Ajouter</button></div>
-      </form>
+      <div class="card-row"><h3 style="margin:0">Congés & absences</h3><button class="btn btn-ghost btn-sm btn-new" id="conge-new">${ICONS.plus} Ajouter</button></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Salarié</th><th>Type</th><th>Début</th><th>Fin</th><th>Statut</th></tr></thead>
         <tbody>${(conges&&conges.length) ? conges.map(c=>`<tr><td>${esc(c.employe_nom||'—')}</td><td>${esc(c.type)}</td><td>${esc(c.date_debut)}</td><td>${esc(c.date_fin)}</td><td><span class="pill pill-muted">${esc(c.statut)}</span></td></tr>`).join('') : emptyRow(5,'Aucun congé enregistré.')}</tbody>
       </table></div>
     </div>
     <div class="card">
-      <h3>Habilitations & qualifications</h3>
-      <form id="form-habilitation" class="form-grid" style="margin-bottom:14px">
-        <div class="field"><label>Salarié</label><select name="employe_id" required><option value="">—</option>${(employes||[]).map(e=>`<option value="${e.id}">${esc(e.nom)}</option>`).join('')}</select></div>
-        <div class="field"><label>Intitulé</label><input name="intitule" required placeholder="CACES, habilitation électrique…"></div>
-        <div class="field"><label>Obtention</label><input name="date_obtention" type="date"></div>
-        <div class="field"><label>Expiration</label><input name="date_expiration" type="date"></div>
-        <div class="field"><button class="btn btn-ghost" type="submit">+ Ajouter</button></div>
-      </form>
+      <div class="card-row"><h3 style="margin:0">Habilitations & qualifications</h3><button class="btn btn-ghost btn-sm btn-new" id="habilitation-new">${ICONS.plus} Ajouter</button></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Salarié</th><th>Intitulé</th><th>Obtention</th><th>Expiration</th></tr></thead>
         <tbody>${(habilitations&&habilitations.length) ? habilitations.map(h=>`<tr><td>${esc(h.employe_nom||'—')}</td><td>${esc(h.intitule)}</td><td>${esc(h.date_obtention||'—')}</td><td>${echeancePill(h.date_expiration)}</td></tr>`).join('') : emptyRow(4,'Aucune habilitation enregistrée.')}</tbody>
       </table></div>
     </div>`;
-  document.getElementById('form-conge').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const emp = (employes||[]).find(x=>x.id===fd.get('employe_id'));
-    const { error } = await sb.from('conges').insert({ entreprise_id: state.entreprise.id, employe_id: emp?.id, employe_nom: emp?.nom, type: fd.get('type'), date_debut: fd.get('date_debut'), date_fin: fd.get('date_fin') });
-    if (error) return toast('Erreur : ' + error.message);
-    toast('Congé ajouté.'); viewRH(main);
-  };
-  document.getElementById('form-habilitation').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const emp = (employes||[]).find(x=>x.id===fd.get('employe_id'));
-    const { error } = await sb.from('habilitations').insert({ entreprise_id: state.entreprise.id, employe_id: emp?.id, employe_nom: emp?.nom, intitule: fd.get('intitule'), date_obtention: fd.get('date_obtention')||null, date_expiration: fd.get('date_expiration')||null });
-    if (error) return toast('Erreur : ' + error.message);
-    toast('Habilitation ajoutée.'); viewRH(main);
-  };
+  document.getElementById('conge-new').onclick = () => drawerConge(main, employes||[]);
+  document.getElementById('habilitation-new').onclick = () => drawerHabilitation(main, employes||[]);
 }
 
 // ---------- SOUS-TRAITANCE ----------
+function drawerSousTraitant(main){
+  openDrawer('Nouveau sous-traitant', `
+    <form id="form-sous-traitant">
+      <div class="form-grid">
+        <div class="field"><label>Nom</label><input name="nom" required></div>
+        <div class="field"><label>SIRET</label><input name="siret"></div>
+        <div class="field"><label>Contact</label><input name="contact"></div>
+        <div class="field"><label>Décennale valide jusqu'au</label><input name="assurance_decennale_validite" type="date"></div>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="sous-traitant-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>`, () => {
+    document.getElementById('sous-traitant-cancel').onclick = closeDrawer;
+    document.getElementById('form-sous-traitant').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const { error } = await sb.from('sous_traitants').insert({ entreprise_id: state.entreprise.id, nom: fd.get('nom'), siret: fd.get('siret'), contact: fd.get('contact'), assurance_decennale_validite: fd.get('assurance_decennale_validite')||null });
+      if (error) return toast('Erreur : ' + error.message);
+      closeDrawer(); toast('Sous-traitant ajouté.'); viewSousTraitance(main);
+    };
+  });
+}
+function drawerSousChantier(main, sousTraitants){
+  openDrawer('Nouveau montant sous-traitance', `
+    <form id="form-sous-chantier">
+      <div class="form-grid">
+        <div class="field"><label>Sous-traitant</label><select name="sous_traitant_id" required><option value="">—</option>${(sousTraitants||[]).map(s=>`<option value="${s.id}">${esc(s.nom)}</option>`).join('')}</select></div>
+        <div class="field"><label>N° chantier</label><input name="numero_chantier"></div>
+        <div class="field"><label>Montant HT (€)</label><input name="montant_ht" type="number" step="10" required></div>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="sous-chantier-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>`, () => {
+    document.getElementById('sous-chantier-cancel').onclick = closeDrawer;
+    document.getElementById('form-sous-chantier').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const st = (sousTraitants||[]).find(s=>s.id===fd.get('sous_traitant_id'));
+      const { error } = await sb.from('sous_traitance_chantiers').insert({ entreprise_id: state.entreprise.id, sous_traitant_id: st?.id, sous_traitant_nom: st?.nom, numero_chantier: fd.get('numero_chantier'), montant_ht: Number(fd.get('montant_ht')||0) });
+      if (error) return toast('Erreur : ' + error.message);
+      closeDrawer(); toast('Montant ajouté.'); viewSousTraitance(main);
+    };
+  });
+}
 async function viewSousTraitance(main){
   const [{ data: sousTraitants }, { data: chantiers }] = await Promise.all([
     sb.from('sous_traitants').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
@@ -1445,27 +1842,14 @@ async function viewSousTraitance(main){
   main.innerHTML = `
     <div class="view-head"><div><h1>Sous-traitance</h1><div class="view-sub">Sous-traitants et montants à payer par chantier.</div></div></div>
     <div class="card">
-      <h3>Sous-traitants</h3>
-      <form id="form-sous-traitant" class="form-grid" style="margin-bottom:14px">
-        <div class="field"><label>Nom</label><input name="nom" required></div>
-        <div class="field"><label>SIRET</label><input name="siret"></div>
-        <div class="field"><label>Contact</label><input name="contact"></div>
-        <div class="field"><label>Décennale valide jusqu'au</label><input name="assurance_decennale_validite" type="date"></div>
-        <div class="field"><button class="btn btn-ghost" type="submit">+ Ajouter</button></div>
-      </form>
+      <div class="card-row"><h3 style="margin:0">Sous-traitants</h3><button class="btn btn-ghost btn-sm btn-new" id="sous-traitant-new">${ICONS.plus} Ajouter</button></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Nom</th><th>SIRET</th><th>Contact</th><th>Décennale</th></tr></thead>
         <tbody>${(sousTraitants&&sousTraitants.length) ? sousTraitants.map(s=>`<tr><td>${esc(s.nom)}</td><td>${esc(s.siret||'—')}</td><td>${esc(s.contact||'—')}</td><td>${echeancePill(s.assurance_decennale_validite,'Décennale')}</td></tr>`).join('') : emptyRow(4,'Aucun sous-traitant.')}</tbody>
       </table></div>
     </div>
     <div class="card">
-      <h3>Montants par chantier</h3>
-      <form id="form-sous-chantier" class="form-grid" style="margin-bottom:14px">
-        <div class="field"><label>Sous-traitant</label><select name="sous_traitant_id" required><option value="">—</option>${(sousTraitants||[]).map(s=>`<option value="${s.id}">${esc(s.nom)}</option>`).join('')}</select></div>
-        <div class="field"><label>N° chantier</label><input name="numero_chantier"></div>
-        <div class="field"><label>Montant HT (€)</label><input name="montant_ht" type="number" step="10" required></div>
-        <div class="field"><button class="btn btn-ghost" type="submit">+ Ajouter</button></div>
-      </form>
+      <div class="card-row"><h3 style="margin:0">Montants par chantier</h3><button class="btn btn-ghost btn-sm btn-new" id="sous-chantier-new">${ICONS.plus} Ajouter</button></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Sous-traitant</th><th>Chantier</th><th class="num">Montant HT</th><th>Statut</th><th></th></tr></thead>
         <tbody>
@@ -1478,21 +1862,8 @@ async function viewSousTraitance(main){
         </tbody>
       </table></div>
     </div>`;
-  document.getElementById('form-sous-traitant').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const { error } = await sb.from('sous_traitants').insert({ entreprise_id: state.entreprise.id, nom: fd.get('nom'), siret: fd.get('siret'), contact: fd.get('contact'), assurance_decennale_validite: fd.get('assurance_decennale_validite')||null });
-    if (error) return toast('Erreur : ' + error.message);
-    toast('Sous-traitant ajouté.'); viewSousTraitance(main);
-  };
-  document.getElementById('form-sous-chantier').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const st = (sousTraitants||[]).find(s=>s.id===fd.get('sous_traitant_id'));
-    const { error } = await sb.from('sous_traitance_chantiers').insert({ entreprise_id: state.entreprise.id, sous_traitant_id: st?.id, sous_traitant_nom: st?.nom, numero_chantier: fd.get('numero_chantier'), montant_ht: Number(fd.get('montant_ht')||0) });
-    if (error) return toast('Erreur : ' + error.message);
-    toast('Montant ajouté.'); viewSousTraitance(main);
-  };
+  document.getElementById('sous-traitant-new').onclick = () => drawerSousTraitant(main);
+  document.getElementById('sous-chantier-new').onclick = () => drawerSousChantier(main, sousTraitants||[]);
   main.querySelectorAll('[data-pay-soustraitant]').forEach(b => b.onclick = async () => {
     await sb.from('sous_traitance_chantiers').update({ statut_paiement:'Paye', date_paiement: todayISO() }).eq('id', b.dataset.paySoustraitant);
     toast('Marqué payé.'); viewSousTraitance(main);
