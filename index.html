@@ -349,12 +349,20 @@ function loadImageAsPngDataUrl(url){
     img.src = url;
   });
 }
+function pdfSafe(s){
+  // la police standard du PDF (WinAnsi) n'a pas le glyphe de l'espace fine insécable
+  // utilisée par toLocaleString('fr-FR') pour les milliers -> on la remplace par un espace normal
+  return String(s==null?'':s).replace(/[  ]/g, ' ');
+}
 async function buildPdfDoc(typeLabel, doc){
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
   const ent = state.entreprise;
-  const marginL = 15, marginR = 195, pageBottom = 280;
+  const marginL = 15, marginR = 195, pageBottom = 268;
   const teal = [11,74,70], gray = [100,100,100], black = [20,20,20];
+  const mny = (n) => pdfSafe(money(n));
+  const nm = (n,d) => pdfSafe(num(n,d));
+  const txt = (s) => pdfSafe(s);
   let y = 20;
   const checkPageBreak = (needed) => { if (y + needed > pageBottom){ pdf.addPage(); y = 20; } };
 
@@ -369,19 +377,19 @@ async function buildPdfDoc(typeLabel, doc){
   }
 
   pdf.setFont('helvetica','bold'); pdf.setFontSize(14); pdf.setTextColor(...black);
-  pdf.text(ent.nom || '', marginL, y);
+  pdf.text(txt(ent.nom || ''), marginL, y);
   let yLeft = y + 6;
   pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(...gray);
   [ent.adresse, ent.forme_juridique, ent.siret ? `SIRET ${ent.siret}` : '', ent.tva_intracom ? `TVA intracommunautaire : ${ent.tva_intracom}` : '']
-    .filter(Boolean).forEach(line => { pdf.text(line, marginL, yLeft); yLeft += 4.5; });
+    .filter(Boolean).forEach(line => { pdf.text(txt(line), marginL, yLeft); yLeft += 4.5; });
 
   let yRight = y;
   pdf.setFont('helvetica','bold'); pdf.setFontSize(13); pdf.setTextColor(...teal);
-  pdf.text(typeLabel, marginR, yRight, { align: 'right' }); yRight += 6;
+  pdf.text(txt(typeLabel), marginR, yRight, { align: 'right' }); yRight += 6;
   pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(...black);
-  pdf.text(`N° ${doc.numero||''}`, marginR, yRight, { align:'right' }); yRight += 4.5;
-  pdf.text(`Date : ${doc.date||''}`, marginR, yRight, { align:'right' }); yRight += 4.5;
-  if (doc.numeroChantier){ pdf.text(`Chantier : ${doc.numeroChantier}`, marginR, yRight, { align:'right' }); yRight += 4.5; }
+  pdf.text(txt(`N° ${doc.numero||''}`), marginR, yRight, { align:'right' }); yRight += 4.5;
+  pdf.text(txt(`Date : ${doc.date||''}`), marginR, yRight, { align:'right' }); yRight += 4.5;
+  if (doc.numeroChantier){ pdf.text(txt(`Chantier : ${doc.numeroChantier}`), marginR, yRight, { align:'right' }); yRight += 4.5; }
 
   y = Math.max(yLeft, yRight) + 4;
   pdf.setDrawColor(...teal); pdf.setLineWidth(0.6);
@@ -389,30 +397,30 @@ async function buildPdfDoc(typeLabel, doc){
   y += 8;
 
   pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.setTextColor(...gray);
-  pdf.text((doc.destinataireLabel || 'CLIENT').toUpperCase(), marginL, y); y += 4.5;
+  pdf.text(txt((doc.destinataireLabel || 'CLIENT').toUpperCase()), marginL, y); y += 4.5;
   pdf.setFont('helvetica','normal'); pdf.setFontSize(11); pdf.setTextColor(...black);
-  pdf.text(doc.clientNom || 'Client ponctuel', marginL, y); y += 9;
+  pdf.text(txt(doc.clientNom || 'Client ponctuel'), marginL, y); y += 9;
 
-  const colX = { desig: marginL, qte: 128, pu: 144, tva: 167 };
+  const colX = { desig: marginL, qteEnd: 133, puEnd: 157, tvaEnd: 177 };
   pdf.setFillColor(240,238,230);
   pdf.rect(marginL, y-4.5, marginR-marginL, 7, 'F');
   pdf.setFont('helvetica','bold'); pdf.setFontSize(8); pdf.setTextColor(...gray);
   pdf.text('DÉSIGNATION', colX.desig+1, y);
-  pdf.text('QTÉ', colX.qte, y);
-  pdf.text('PU HT', colX.pu, y);
-  pdf.text('TVA', colX.tva, y);
+  pdf.text('QTÉ', colX.qteEnd, y, { align:'right' });
+  pdf.text('PU HT', colX.puEnd, y, { align:'right' });
+  pdf.text('TVA', colX.tvaEnd, y, { align:'right' });
   pdf.text('TOTAL HT', marginR, y, { align:'right' });
   y += 7;
 
   pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(...black);
   (doc.lignes||[]).forEach(l => {
-    const desigLines = pdf.splitTextToSize(l.designation||'', 108);
+    const desigLines = pdf.splitTextToSize(txt(l.designation||''), 100);
     checkPageBreak(Math.max(6, desigLines.length*4.5) + 3);
     pdf.text(desigLines, colX.desig, y);
-    pdf.text(String(num(l.quantite)), colX.qte, y);
-    pdf.text(money(l.pu), colX.pu, y);
-    pdf.text(num(l.tva,1)+'%', colX.tva, y);
-    pdf.text(money(l.total), marginR, y, { align:'right' });
+    pdf.text(nm(l.quantite), colX.qteEnd, y, { align:'right' });
+    pdf.text(mny(l.pu), colX.puEnd, y, { align:'right' });
+    pdf.text(nm(l.tva,1)+'%', colX.tvaEnd, y, { align:'right' });
+    pdf.text(mny(l.total), marginR, y, { align:'right' });
     y += Math.max(6, desigLines.length*4.5);
     pdf.setDrawColor(224,224,224); pdf.setLineWidth(0.2);
     pdf.line(marginL, y-2, marginR, y-2);
@@ -421,16 +429,16 @@ async function buildPdfDoc(typeLabel, doc){
   y += 5;
   checkPageBreak(24);
   pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(...black);
-  pdf.text('Total HT', marginR-45, y); pdf.text(money(doc.totalHT), marginR, y, {align:'right'}); y += 5;
+  pdf.text('Total HT', marginR-45, y); pdf.text(mny(doc.totalHT), marginR, y, {align:'right'}); y += 5;
   pdf.setTextColor(...gray);
-  pdf.text(`TVA (${num(doc.tauxTva,1)}%)`, marginR-45, y); pdf.text(money(doc.totalTVA), marginR, y, {align:'right'}); y += 5;
+  pdf.text(txt(`TVA (${nm(doc.tauxTva,1)}%)`), marginR-45, y); pdf.text(mny(doc.totalTVA), marginR, y, {align:'right'}); y += 5;
   pdf.setDrawColor(20,20,20); pdf.setLineWidth(0.3); pdf.line(marginR-45, y, marginR, y); y += 5;
   pdf.setFont('helvetica','bold'); pdf.setFontSize(11); pdf.setTextColor(...black);
-  pdf.text('Total TTC', marginR-45, y); pdf.text(money(doc.totalTTC), marginR, y, {align:'right'});
+  pdf.text('Total TTC', marginR-45, y); pdf.text(mny(doc.totalTTC), marginR, y, {align:'right'});
   y += 11;
 
   if (doc.extraLine){
-    const lines = pdf.splitTextToSize(doc.extraLine, marginR-marginL);
+    const lines = pdf.splitTextToSize(txt(doc.extraLine), marginR-marginL);
     checkPageBreak(lines.length*4.5 + 4);
     pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(...black);
     pdf.text(lines, marginL, y); y += lines.length*4.5 + 4;
@@ -438,21 +446,29 @@ async function buildPdfDoc(typeLabel, doc){
   if (doc.conditionsPaiement){
     checkPageBreak(7);
     pdf.setFontSize(9); pdf.setTextColor(...black);
-    pdf.text(`Conditions de paiement : ${doc.conditionsPaiement}`, marginL, y); y += 7;
+    pdf.text(txt(`Conditions de paiement : ${doc.conditionsPaiement}`), marginL, y); y += 7;
   }
 
+  // Pied de page legal : fixe en bas de CHAQUE page, pas juste a la suite du contenu
   const footerParts = [];
   if (ent.assurance_decennale_assureur) footerParts.push(`Assurance décennale : ${ent.assurance_decennale_assureur}${ent.assurance_decennale_attestation ? ' — attestation ' + ent.assurance_decennale_attestation : ''}${ent.assurance_decennale_validite ? (' (valide jusqu\'au ' + ent.assurance_decennale_validite + ')') : ''}.`);
   if (ent.rc_pro_assureur) footerParts.push(`RC Pro : ${ent.rc_pro_assureur}.`);
   if (ent.iban) footerParts.push(`IBAN ${ent.iban}${ent.bic ? ' — BIC ' + ent.bic : ''}.`);
   if (ent.pied_page_legal) footerParts.push(ent.pied_page_legal);
   if (footerParts.length){
-    const footerText = footerParts.join(' ');
-    const lines = pdf.splitTextToSize(footerText, marginR-marginL);
-    checkPageBreak(lines.length*3.8 + 6);
-    pdf.setDrawColor(221,221,221); pdf.setLineWidth(0.2); pdf.line(marginL, y, marginR, y); y += 5;
-    pdf.setFont('helvetica','normal'); pdf.setFontSize(7); pdf.setTextColor(...gray);
-    pdf.text(lines, marginL, y);
+    const footerText = txt(footerParts.join(' '));
+    const footerLines = pdf.splitTextToSize(footerText, marginR-marginL);
+    const pageH = pdf.internal.pageSize.getHeight();
+    const footerY = pageH - 12 - Math.max(0, footerLines.length-1)*3.6;
+    const totalPages = pdf.internal.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++){
+      pdf.setPage(p);
+      pdf.setDrawColor(221,221,221); pdf.setLineWidth(0.2);
+      pdf.line(marginL, footerY - 4, marginR, footerY - 4);
+      pdf.setFont('helvetica','normal'); pdf.setFontSize(7); pdf.setTextColor(...gray);
+      pdf.text(footerLines, marginL, footerY);
+      pdf.text(`${p} / ${totalPages}`, marginR, footerY, { align: 'right' });
+    }
   }
   return pdf;
 }
@@ -509,17 +525,29 @@ function openEmailModal(typeLabel, doc, toEmail, kind){
       <label>Message</label>
       <textarea id="email-body" rows="11" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:13px">${esc(body)}</textarea>
     </div>
-    <div class="view-sub" style="margin-top:8px">Tu peux modifier librement ce texte. Pense à joindre le PDF téléchargé (bouton « Télécharger PDF ») — un navigateur ne peut pas joindre de fichier automatiquement.</div>
+    <div class="view-sub" style="margin-top:8px">Tu peux modifier librement ce texte. Pense à joindre le PDF téléchargé (bouton « Télécharger PDF ») — un navigateur ne peut pas joindre de fichier automatiquement. « Envoyer automatiquement » ne fonctionne que si l'envoi d'email réel a été configuré (clé API Resend côté Supabase) — sinon utilise les autres boutons.</div>
     <div class="drawer-foot" style="margin:18px -20px -18px;flex-wrap:wrap;justify-content:flex-start;gap:8px">
       <button class="btn btn-ghost" type="button" id="email-copy">Copier le texte</button>
       <button class="btn btn-ghost" type="button" id="email-copy-address">Copier l'adresse</button>
-      <button class="btn btn-primary" type="button" id="email-open-mailto">Ouvrir dans le client mail</button>
+      <button class="btn btn-ghost" type="button" id="email-open-mailto">Ouvrir dans le client mail</button>
+      <button class="btn btn-primary" type="button" id="email-send-auto">Envoyer automatiquement</button>
     </div>`, () => {
     document.getElementById('email-open-mailto').onclick = () => {
       const to = document.getElementById('email-to').value;
       const subj = document.getElementById('email-subject').value;
       const bod = document.getElementById('email-body').value;
       window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(bod)}`;
+    };
+    document.getElementById('email-send-auto').onclick = async (e) => {
+      const to = document.getElementById('email-to').value;
+      const subj = document.getElementById('email-subject').value;
+      const bod = document.getElementById('email-body').value;
+      if (!to) return toast("Renseigne une adresse dans « À ».");
+      e.target.disabled = true; toast('Envoi en cours…');
+      const { data, error } = await sb.functions.invoke('send-email', { body: { to, subject: subj, text: bod } });
+      e.target.disabled = false;
+      if (error || data?.error){ toast('Envoi auto indisponible : ' + (data?.error || error.message) + ' — utilise les autres boutons.'); return; }
+      toast('Email envoyé !'); closeDrawer();
     };
     document.getElementById('email-copy').onclick = async () => {
       const to = document.getElementById('email-to').value;
@@ -549,6 +577,20 @@ function filterRows(items, term, fields){
   return items.filter(it => fields.some(f => String(it[f]||'').toLowerCase().includes(t)));
 }
 
+// ---------- EXPORT CSV ----------
+function num2(n){ return Number(n||0).toFixed(2).replace('.', ','); }
+function downloadCSV(filename, rows, headers){
+  const escCsv = (v) => { const s = String(v==null?'':v); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; };
+  const lines = [headers.join(';'), ...rows.map(r => headers.map(h => escCsv(r[h])).join(';'))];
+  const csv = '﻿' + lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ---------- ICONS ----------
 const ICONS = {
   dashboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
@@ -565,6 +607,7 @@ const ICONS = {
   commandes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>',
   rh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
   soustraitance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="19" r="3"/><path d="M15 6.5L9 17.5"/></svg>',
+  compta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>',
 };
@@ -573,6 +616,7 @@ const NAV_GROUPS = [
   { label: 'Commercial', items: ['devis','commandes','clients','factures'] },
   { label: 'Opérations', items: ['planning','bibliotheque','heures','stock','achats','materiel'] },
   { label: 'RH & partenaires', items: ['rh','soustraitance'] },
+  { label: 'Compta', items: ['compta'] },
   { label: 'Réglages', items: ['config'] },
 ];
 
@@ -772,6 +816,7 @@ const NAV = [
   { id:'factures', label:'Factures' },
   { id:'rh', label:'RH' },
   { id:'soustraitance', label:'Sous-traitance' },
+  { id:'compta', label:'Compta' },
 ];
 
 function renderShell(){
@@ -806,7 +851,7 @@ function updateNavActive(){
 async function renderView(){
   const main = document.getElementById('main');
   main.innerHTML = `<div class="view-head"><h1>…</h1></div>`;
-  const fn = { dashboard:viewDashboard, config:viewConfig, planning:viewPlanning, bibliotheque:viewBibliotheque, devis:viewDevis, commandes:viewCommandes, heures:viewHeures, stock:viewStock, achats:viewAchats, materiel:viewMateriel, clients:viewClients, factures:viewFactures, rh:viewRH, soustraitance:viewSousTraitance }[state.view];
+  const fn = { dashboard:viewDashboard, config:viewConfig, planning:viewPlanning, bibliotheque:viewBibliotheque, devis:viewDevis, commandes:viewCommandes, heures:viewHeures, stock:viewStock, achats:viewAchats, materiel:viewMateriel, clients:viewClients, factures:viewFactures, rh:viewRH, soustraitance:viewSousTraitance, compta:viewCompta }[state.view];
   await fn(main);
 }
 
@@ -2537,6 +2582,131 @@ async function viewSousTraitance(main){
     await sb.from('sous_traitance_chantiers').update({ statut_paiement:'Paye', date_paiement: todayISO() }).eq('id', b.dataset.paySoustraitant);
     toast('Marqué payé.'); viewSousTraitance(main);
   });
+}
+
+// ---------- COMPTA (export, TVA, notes de frais) ----------
+function noteFraisStatutPill(s){
+  const map = { 'A valider':['pill-warn','À valider'], 'Validee':['pill-ok','Validée'], 'Remboursee':['pill-muted','Remboursée'] };
+  const [cls,label] = map[s] || ['pill-muted', s];
+  return `<span class="pill ${cls}">${esc(label)}</span>`;
+}
+function drawerNoteFrais(main, employes){
+  openDrawer('Nouvelle note de frais', `
+    <form id="form-note-frais">
+      <div class="form-grid">
+        <div class="field"><label>Salarié</label><select name="employe_id" required><option value="">—</option>${(employes||[]).map(e=>`<option value="${e.id}">${esc(e.nom)}</option>`).join('')}</select></div>
+        <div class="field"><label>Date</label><input name="date" type="date" value="${todayISO()}" required></div>
+        <div class="field"><label>Catégorie</label>
+          <select name="categorie"><option>Carburant</option><option>Péage</option><option>Repas</option><option>Hébergement</option><option>Matériel</option><option>Autre</option></select>
+        </div>
+        <div class="field"><label>Montant TTC (€)</label><input name="montant_ttc" type="number" step="0.01" required></div>
+        <div class="field" style="grid-column:1/-1"><label>Description</label><input name="description" placeholder="Détail de la dépense"></div>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="nf-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>`, () => {
+    document.getElementById('nf-cancel').onclick = closeDrawer;
+    document.getElementById('form-note-frais').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const emp = (employes||[]).find(x=>x.id===fd.get('employe_id'));
+      const { error } = await sb.from('notes_frais').insert({
+        entreprise_id: state.entreprise.id, employe_id: emp?.id||null, employe_nom: emp?.nom||null,
+        date: fd.get('date'), categorie: fd.get('categorie'), description: fd.get('description'),
+        montant_ttc: Number(fd.get('montant_ttc')||0),
+      });
+      if (error) return toast('Erreur : ' + error.message);
+      closeDrawer(); toast('Note de frais ajoutée.'); viewCompta(main);
+    };
+  });
+}
+async function viewCompta(main){
+  const today = todayISO();
+  if (!state.comptaDebut) state.comptaDebut = today.slice(0,8) + '01';
+  if (!state.comptaFin) state.comptaFin = today;
+
+  const [{ data: employes }, { data: notesFrais }] = await Promise.all([
+    sb.from('employes').select('*').eq('entreprise_id', state.entreprise.id).eq('actif', true).order('nom'),
+    sb.from('notes_frais').select('*').eq('entreprise_id', state.entreprise.id).order('date', { ascending:false }),
+  ]);
+
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Compta</h1><div class="view-sub">Export pour le comptable, récap TVA, notes de frais.</div></div></div>
+    <div class="card">
+      <h3>Période</h3>
+      <div class="form-grid">
+        <div class="field"><label>Du</label><input id="compta-debut" type="date" value="${state.comptaDebut}"></div>
+        <div class="field"><label>Au</label><input id="compta-fin" type="date" value="${state.comptaFin}"></div>
+        <div class="field"><button class="btn btn-ghost" id="compta-refresh" type="button">Appliquer</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Export comptable</h3>
+      <div class="view-sub" style="margin-bottom:10px">CSV (séparateur « ; », nombres avec virgule) — à transmettre à ton comptable.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-ghost" id="export-ventes" type="button">Exporter les ventes</button>
+        <button class="btn btn-ghost" id="export-achats" type="button">Exporter les achats</button>
+      </div>
+    </div>
+    <div class="card" id="tva-card"><h3>Récap TVA</h3><div class="view-sub">Calcul…</div></div>
+    <div class="card">
+      <div class="card-row"><h3 style="margin:0">Notes de frais</h3><button class="btn btn-ghost btn-sm btn-new" id="nf-new">${ICONS.plus} Nouvelle note</button></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Salarié</th><th>Catégorie</th><th>Description</th><th class="num">Montant TTC</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          ${(notesFrais&&notesFrais.length) ? notesFrais.map(n => `
+            <tr>
+              <td>${esc(n.date)}</td><td>${esc(n.employe_nom||'—')}</td><td>${esc(n.categorie)}</td><td>${esc(n.description||'—')}</td>
+              <td class="num">${money(n.montant_ttc)}</td>
+              <td>${noteFraisStatutPill(n.statut)}</td>
+              <td>${n.statut==='A valider' ? `<button class="btn btn-ghost btn-sm" data-valider-nf="${n.id}">Valider</button>` : n.statut==='Validee' ? `<button class="btn btn-ghost btn-sm" data-rembourser-nf="${n.id}">Marquer remboursée</button>` : ''}</td>
+            </tr>`).join('') : emptyRow(7,'Aucune note de frais.')}
+        </tbody>
+      </table></div>
+    </div>`;
+
+  document.getElementById('nf-new').onclick = () => drawerNoteFrais(main, employes||[]);
+  document.getElementById('compta-refresh').onclick = () => {
+    state.comptaDebut = document.getElementById('compta-debut').value || state.comptaDebut;
+    state.comptaFin = document.getElementById('compta-fin').value || state.comptaFin;
+    viewCompta(main);
+  };
+  main.querySelectorAll('[data-valider-nf]').forEach(b => b.onclick = async () => {
+    await sb.from('notes_frais').update({ statut: 'Validee' }).eq('id', b.dataset.validerNf);
+    toast('Note validée.'); viewCompta(main);
+  });
+  main.querySelectorAll('[data-rembourser-nf]').forEach(b => b.onclick = async () => {
+    await sb.from('notes_frais').update({ statut: 'Remboursee' }).eq('id', b.dataset.rembourserNf);
+    toast('Note marquée remboursée.'); viewCompta(main);
+  });
+  document.getElementById('export-ventes').onclick = async () => {
+    const { data } = await sb.from('v_factures').select('*').eq('entreprise_id', state.entreprise.id)
+      .gte('date_emission', state.comptaDebut).lte('date_emission', state.comptaFin).order('date_emission');
+    downloadCSV(`ventes_${state.comptaDebut}_${state.comptaFin}.csv`,
+      (data||[]).map(f => ({ Numero:f.numero_facture, Type:f.type, Date:f.date_emission, Client:f.client_nom, Chantier:f.numero_chantier, MontantHT:num2(f.montant_ht), TVA:num2(f.tva), MontantTTC:num2(f.montant_ttc), Statut:f.statut, DatePaiement:f.date_paiement||'' })),
+      ['Numero','Type','Date','Client','Chantier','MontantHT','TVA','MontantTTC','Statut','DatePaiement']);
+  };
+  document.getElementById('export-achats').onclick = async () => {
+    const { data } = await sb.from('factures_achats').select('*').eq('entreprise_id', state.entreprise.id)
+      .gte('date_facture', state.comptaDebut).lte('date_facture', state.comptaFin).order('date_facture');
+    downloadCSV(`achats_${state.comptaDebut}_${state.comptaFin}.csv`,
+      (data||[]).map(f => ({ NumeroFournisseur:f.numero_fournisseur||'', Date:f.date_facture, Fournisseur:f.fournisseur_nom, MontantHT:num2(f.montant_ht), TVA:num2(f.tva), MontantTTC:num2(f.montant_ttc), Statut:f.statut_paiement, DatePaiement:f.date_paiement||'' })),
+      ['NumeroFournisseur','Date','Fournisseur','MontantHT','TVA','MontantTTC','Statut','DatePaiement']);
+  };
+
+  const [{ data: ventesTva }, { data: achatsTva }] = await Promise.all([
+    sb.from('v_factures').select('tva').eq('entreprise_id', state.entreprise.id).gte('date_emission', state.comptaDebut).lte('date_emission', state.comptaFin),
+    sb.from('factures_achats').select('tva').eq('entreprise_id', state.entreprise.id).gte('date_facture', state.comptaDebut).lte('date_facture', state.comptaFin),
+  ]);
+  const collectee = (ventesTva||[]).reduce((s,f)=>s+Number(f.tva||0),0);
+  const deductible = (achatsTva||[]).reduce((s,f)=>s+Number(f.tva||0),0);
+  document.getElementById('tva-card').innerHTML = `
+    <h3>Récap TVA — ${esc(state.comptaDebut)} au ${esc(state.comptaFin)}</h3>
+    <div class="grid-kpi" style="margin-bottom:0">
+      ${kpi('TVA collectée (ventes)', money(collectee), '', '')}
+      ${kpi('TVA déductible (achats)', money(deductible), '', '')}
+      ${kpi('TVA à payer', money(collectee-deductible), '', (collectee-deductible)>=0?'warn':'good')}
+    </div>
+    <div class="view-sub" style="margin-top:10px">Indicatif — régime réel/simplifié, prorata et immobilisations non gérés ici : à vérifier avec ton comptable avant toute déclaration.</div>`;
 }
 
 // ---------- ROOT RENDER ----------
