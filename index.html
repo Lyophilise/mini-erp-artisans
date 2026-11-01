@@ -332,17 +332,23 @@ function printDoc(typeLabel, doc){
   document.getElementById('print-area').innerHTML = buildDocFragment(typeLabel, doc);
   window.print();
 }
-function loadImageAsPngDataUrl(url){
+function loadImageAsPngDataUrl(url, maxDim){
+  maxDim = maxDim || 500; // une image source trop grande fait exploser la taille du PDF (jsPDF ne recompresse pas toujours bien les PNG)
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       try {
+        let w = img.naturalWidth || 200, h = img.naturalHeight || 200;
+        if (w > maxDim || h > maxDim){
+          const scale = maxDim / Math.max(w, h);
+          w = Math.round(w * scale); h = Math.round(h * scale);
+        }
         const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth || 200; canvas.height = img.naturalHeight || 200;
+        canvas.width = w; canvas.height = h;
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve({ dataUrl: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve({ dataUrl: canvas.toDataURL('image/png'), w, h });
       } catch (e){ resolve(null); }
     };
     img.onerror = () => resolve(null);
