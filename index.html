@@ -426,15 +426,16 @@ async function buildPdfDoc(typeLabel, doc){
   pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(...black);
   (doc.lignes||[]).forEach(l => {
     const desigLines = pdf.splitTextToSize(txt(l.designation||''), 100);
-    checkPageBreak(Math.max(6, desigLines.length*4.5) + 3);
+    const rowH = Math.max(7, desigLines.length*5);
+    checkPageBreak(rowH + 3);
     pdf.text(desigLines, colX.desig, y);
     pdf.text(nm(l.quantite), colX.qteEnd, y, { align:'right' });
     pdf.text(mny(l.pu), colX.puEnd, y, { align:'right' });
     pdf.text(nm(l.tva,1)+'%', colX.tvaEnd, y, { align:'right' });
     pdf.text(mny(l.total), marginR, y, { align:'right' });
-    y += Math.max(6, desigLines.length*4.5);
+    y += rowH;
     pdf.setDrawColor(224,224,224); pdf.setLineWidth(0.2);
-    pdf.line(marginL, y-2, marginR, y-2);
+    pdf.line(marginL, y-2.8, marginR, y-2.8);
   });
 
   y += 5;
@@ -468,17 +469,18 @@ async function buildPdfDoc(typeLabel, doc){
   if (ent.pied_page_legal) footerParts.push(ent.pied_page_legal);
   if (footerParts.length){
     const footerText = txt(footerParts.join(' '));
-    const footerLines = pdf.splitTextToSize(footerText, marginR-marginL);
+    const footerLines = pdf.splitTextToSize(footerText, marginR-marginL-20);
     const pageH = pdf.internal.pageSize.getHeight();
-    const footerY = pageH - 12 - Math.max(0, footerLines.length-1)*3.6;
+    const pageCenterX = (marginL + marginR) / 2;
+    const footerY = pageH - 15 - Math.max(0, footerLines.length-1)*3.6;
     const totalPages = pdf.internal.getNumberOfPages();
     for (let p = 1; p <= totalPages; p++){
       pdf.setPage(p);
       pdf.setDrawColor(221,221,221); pdf.setLineWidth(0.2);
-      pdf.line(marginL, footerY - 4, marginR, footerY - 4);
+      pdf.line(marginL, footerY - 5, marginR, footerY - 5);
       pdf.setFont('helvetica','normal'); pdf.setFontSize(7); pdf.setTextColor(...gray);
-      pdf.text(footerLines, marginL, footerY);
-      pdf.text(`${p} / ${totalPages}`, marginR, footerY, { align: 'right' });
+      pdf.text(footerLines, pageCenterX, footerY, { align: 'center' });
+      pdf.text(`${p} / ${totalPages}`, pageCenterX, footerY + footerLines.length*3.6 + 3, { align: 'center' });
     }
   }
   return pdf;
@@ -536,7 +538,7 @@ function openEmailModal(typeLabel, doc, toEmail, kind){
       <label>Message</label>
       <textarea id="email-body" rows="11" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:13px">${esc(body)}</textarea>
     </div>
-    <div class="view-sub" style="margin-top:8px">Tu peux modifier librement ce texte. Pense à joindre le PDF téléchargé (bouton « Télécharger PDF ») — un navigateur ne peut pas joindre de fichier automatiquement. « Envoyer automatiquement » ne fonctionne que si l'envoi d'email réel a été configuré (clé API Resend côté Supabase) — sinon utilise les autres boutons.</div>
+    <div class="view-sub" style="margin-top:8px">Tu peux modifier librement ce texte. Pense à joindre le PDF téléchargé (bouton « Télécharger PDF ») — un navigateur ne peut pas joindre de fichier automatiquement. « Envoyer automatiquement » ne fonctionne que si l'envoi d'email réel a été configuré (clé API Resend côté Supabase) — sinon utilise les autres boutons. Les réponses du client arriveront sur l'« Email de contact » renseigné dans Config.</div>
     <div class="drawer-foot" style="margin:18px -20px -18px;flex-wrap:wrap;justify-content:flex-start;gap:8px">
       <button class="btn btn-ghost" type="button" id="email-copy">Copier le texte</button>
       <button class="btn btn-ghost" type="button" id="email-copy-address">Copier l'adresse</button>
@@ -555,7 +557,7 @@ function openEmailModal(typeLabel, doc, toEmail, kind){
       const bod = document.getElementById('email-body').value;
       if (!to) return toast("Renseigne une adresse dans « À ».");
       e.target.disabled = true; toast('Envoi en cours…');
-      const { data, error } = await sb.functions.invoke('send-email', { body: { to, subject: subj, text: bod } });
+      const { data, error } = await sb.functions.invoke('send-email', { body: { to, subject: subj, text: bod, replyTo: state.entreprise.email_contact || undefined } });
       e.target.disabled = false;
       if (error || data?.error){ toast('Envoi auto indisponible : ' + (data?.error || error.message) + ' — utilise les autres boutons.'); return; }
       toast('Email envoyé !'); closeDrawer();
@@ -1030,6 +1032,7 @@ async function viewConfig(main){
         <div class="field"><label>IBAN</label><input name="iban" value="${esc(ent.iban||'')}"></div>
         <div class="field"><label>BIC</label><input name="bic" value="${esc(ent.bic||'')}"></div>
         <div class="field"><label>Conditions de paiement</label><input name="conditions_paiement" value="${esc(ent.conditions_paiement||'')}"></div>
+        <div class="field"><label>Email de contact (réponses clients)</label><input name="email_contact" type="email" value="${esc(ent.email_contact||'')}" placeholder="contact@tonentreprise.fr"></div>
         <div class="field" style="grid-column:1/-1"><label>Pied de page légal (texte libre, imprimé sur devis/factures)</label><input name="pied_page_legal" value="${esc(ent.pied_page_legal||'')}"></div>
         <div class="field"><button class="btn btn-primary" type="submit">Enregistrer les mentions légales</button></div>
       </form>
@@ -1111,7 +1114,7 @@ async function viewConfig(main){
     e.preventDefault();
     const fd = new FormData(e.target);
     const payload = {};
-    ['siret','forme_juridique','tva_intracom','adresse','assurance_decennale_assureur','assurance_decennale_attestation','rc_pro_assureur','iban','bic','conditions_paiement','pied_page_legal'].forEach(k => payload[k] = fd.get(k) || null);
+    ['siret','forme_juridique','tva_intracom','adresse','assurance_decennale_assureur','assurance_decennale_attestation','rc_pro_assureur','iban','bic','conditions_paiement','pied_page_legal','email_contact'].forEach(k => payload[k] = fd.get(k) || null);
     ['assurance_decennale_validite','rc_pro_validite'].forEach(k => payload[k] = fd.get(k) || null);
     const { error } = await sb.from('entreprises').update(payload).eq('id', ent.id);
     if (error) return toast('Erreur : ' + error.message);
@@ -2633,23 +2636,46 @@ function drawerNoteFrais(main, employes){
         </div>
         <div class="field"><label>Montant TTC (€)</label><input name="montant_ttc" type="number" step="0.01" required></div>
         <div class="field" style="grid-column:1/-1"><label>Description</label><input name="description" placeholder="Détail de la dépense"></div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Photo du justificatif (optionnel)</label>
+          <input type="file" id="nf-justificatif" accept="image/*" capture="environment">
+          <div class="view-sub" style="margin-top:4px">Sur mobile, ça ouvre directement l'appareil photo.</div>
+        </div>
       </div>
       <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="nf-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
     </form>`, () => {
     document.getElementById('nf-cancel').onclick = closeDrawer;
     document.getElementById('form-note-frais').onsubmit = async (e) => {
       e.preventDefault();
+      const submitBtn = e.target.querySelector('[type="submit"]');
+      submitBtn.disabled = true;
       const fd = new FormData(e.target);
       const emp = (employes||[]).find(x=>x.id===fd.get('employe_id'));
+      let justificatifPath = null;
+      const file = document.getElementById('nf-justificatif').files[0];
+      if (file){
+        toast('Envoi de la photo…');
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const path = `${state.entreprise.id}/${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await sb.storage.from('justificatifs').upload(path, file);
+        if (upErr){ submitBtn.disabled = false; return toast('Erreur photo : ' + upErr.message); }
+        justificatifPath = path;
+      }
       const { error } = await sb.from('notes_frais').insert({
         entreprise_id: state.entreprise.id, employe_id: emp?.id||null, employe_nom: emp?.nom||null,
         date: fd.get('date'), categorie: fd.get('categorie'), description: fd.get('description'),
-        montant_ttc: Number(fd.get('montant_ttc')||0),
+        montant_ttc: Number(fd.get('montant_ttc')||0), justificatif_path: justificatifPath,
       });
+      submitBtn.disabled = false;
       if (error) return toast('Erreur : ' + error.message);
       closeDrawer(); toast('Note de frais ajoutée.'); viewCompta(main);
     };
   });
+}
+async function voirJustificatif(path){
+  const { data, error } = await sb.storage.from('justificatifs').createSignedUrl(path, 300);
+  if (error) return toast('Erreur : ' + error.message);
+  window.open(data.signedUrl, '_blank');
 }
 async function viewCompta(main){
   const today = todayISO();
@@ -2683,20 +2709,22 @@ async function viewCompta(main){
     <div class="card">
       <div class="card-row"><h3 style="margin:0">Notes de frais</h3><button class="btn btn-ghost btn-sm btn-new" id="nf-new">${ICONS.plus} Nouvelle note</button></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Date</th><th>Salarié</th><th>Catégorie</th><th>Description</th><th class="num">Montant TTC</th><th>Statut</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>Salarié</th><th>Catégorie</th><th>Description</th><th class="num">Montant TTC</th><th>Justificatif</th><th>Statut</th><th></th></tr></thead>
         <tbody>
           ${(notesFrais&&notesFrais.length) ? notesFrais.map(n => `
             <tr>
               <td>${esc(n.date)}</td><td>${esc(n.employe_nom||'—')}</td><td>${esc(n.categorie)}</td><td>${esc(n.description||'—')}</td>
               <td class="num">${money(n.montant_ttc)}</td>
+              <td>${n.justificatif_path ? `<button class="btn btn-ghost btn-sm" data-voir-justificatif="${esc(n.justificatif_path)}">Voir</button>` : '—'}</td>
               <td>${noteFraisStatutPill(n.statut)}</td>
               <td>${n.statut==='A valider' ? `<button class="btn btn-ghost btn-sm" data-valider-nf="${n.id}">Valider</button>` : n.statut==='Validee' ? `<button class="btn btn-ghost btn-sm" data-rembourser-nf="${n.id}">Marquer remboursée</button>` : ''}</td>
-            </tr>`).join('') : emptyRow(7,'Aucune note de frais.')}
+            </tr>`).join('') : emptyRow(8,'Aucune note de frais.')}
         </tbody>
       </table></div>
     </div>`;
 
   document.getElementById('nf-new').onclick = () => drawerNoteFrais(main, employes||[]);
+  main.querySelectorAll('[data-voir-justificatif]').forEach(b => b.onclick = () => voirJustificatif(b.dataset.voirJustificatif));
   document.getElementById('compta-refresh').onclick = () => {
     state.comptaDebut = document.getElementById('compta-debut').value || state.comptaDebut;
     state.comptaFin = document.getElementById('compta-fin').value || state.comptaFin;
