@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 <style>
 :root{
   --bg:#F5F3EE; --surface:#FFFFFF; --surface-2:#EFEBE2; --border:#E0DACB;
@@ -330,17 +331,52 @@ function printDoc(typeLabel, doc){
   document.getElementById('print-area').innerHTML = buildDocFragment(typeLabel, doc);
   window.print();
 }
+function downloadDoc(typeLabel, doc){
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:740px;background:#fff';
+  container.innerHTML = buildDocFragment(typeLabel, doc);
+  document.body.appendChild(container);
+  const filename = `${typeLabel}_${doc.numero}`.replace(/[^\w.-]+/g, '_') + '.pdf';
+  toast('Génération du PDF…');
+  html2pdf().from(container).set({
+    filename, margin: 10,
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+  }).save().then(() => {
+    document.body.removeChild(container);
+    toast('PDF téléchargé.');
+  }).catch((e) => {
+    document.body.removeChild(container);
+    toast('Erreur PDF : ' + e.message);
+  });
+}
 async function getClientEmail(clientId){
   if (!clientId) return null;
   const { data } = await sb.from('clients').select('email').eq('id', clientId).maybeSingle();
   return data?.email || null;
 }
+function emailSubjectBody(typeLabel, doc){
+  const subject = `${typeLabel} ${doc.numero} — ${state.entreprise.nom}`;
+  const body = `Bonjour,\n\nVeuillez trouver ci-joint notre ${typeLabel.toLowerCase()} n° ${doc.numero} (${money(doc.totalTTC)} TTC).\nPensez à joindre le PDF téléchargé via le bouton "Télécharger PDF".\n\nCordialement,\n${state.entreprise.nom}`;
+  return { subject, body };
+}
 async function emailDoc(typeLabel, doc, clientId){
   const email = await getClientEmail(clientId);
-  const subject = `${typeLabel} ${doc.numero} — ${esc(state.entreprise.nom)}`;
-  const body = `Bonjour,\n\nVeuillez trouver ci-joint notre ${typeLabel.toLowerCase()} n° ${doc.numero} (${money(doc.totalTTC)} TTC).\nPensez à joindre le PDF téléchargé via le bouton "Imprimer / PDF".\n\nCordialement,\n${state.entreprise.nom}`;
-  if (!email){ toast("Aucun email enregistré pour ce client — ouverture d'un brouillon sans destinataire."); }
-  window.location.href = `mailto:${email||''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const { subject, body } = emailSubjectBody(typeLabel, doc);
+  if (!email){ toast("Aucun email enregistré pour ce client."); }
+  const win = window.open(`mailto:${email||''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+  setTimeout(() => { toast("Rien ne s'est ouvert ? Ton navigateur n'a pas de client mail par défaut — utilise \"Copier le texte\" juste à côté."); }, 900);
+}
+async function copyDocEmailText(typeLabel, doc, clientId){
+  const email = await getClientEmail(clientId);
+  const { subject, body } = emailSubjectBody(typeLabel, doc);
+  const full = `${email ? 'À : ' + email + '\n' : ''}Objet : ${subject}\n\n${body}`;
+  try {
+    await navigator.clipboard.writeText(full);
+    toast('Texte copié — colle-le dans Gmail / Outlook.');
+  } catch (e) {
+    toast('Impossible de copier automatiquement : ' + e.message);
+  }
 }
 
 // ---------- SEARCH FILTER (client-side) ----------
@@ -658,6 +694,7 @@ async function viewDashboard(main){
       ${kpi('Habilitations à renouveler', row.habilitations_alertes||0, '', (row.habilitations_alertes||0)>0?'warn':'good')}
       ${kpi('Commandes en attente', row.commandes_en_attente||0, '', (row.commandes_en_attente||0)>0?'warn':'good')}
       ${kpi('Sous-traitance à payer', money(row.sous_traitance_a_payer), '', (row.sous_traitance_a_payer||0)>0?'warn':'good')}
+      ${kpi('Factures fournisseurs à payer', money(row.factures_achats_a_payer), '', (row.factures_achats_a_payer||0)>0?'warn':'good')}
     </div>
     <div class="card">
       <h3>CA facturé TTC — 6 derniers mois</h3>
@@ -703,8 +740,8 @@ function kpi(label, value, sub, tone){
 }
 function emptyRow(colspan, text){ return `<tr class="empty-row"><td colspan="${colspan}">${esc(text)}</td></tr>`; }
 function statutChantierPill(s){
-  const cls = s==='Termine' ? 'pill-ok' : s==='En cours' ? 'pill-warn' : 'pill-muted';
-  const label = {'Devis envoye':'Devis envoyé','Accepte':'Accepté','En cours':'En cours','Termine':'Terminé'}[s] || (s||'—');
+  const cls = s==='Accepte' ? 'pill-ok' : s==='Refuse' ? 'pill-bad' : 'pill-muted';
+  const label = {'Devis envoye':'Devis envoyé','Accepte':'Accepté','Refuse':'Refusé'}[s] || (s||'—');
   return `<span class="pill ${cls}">${esc(label)}</span>`;
 }
 
@@ -833,7 +870,8 @@ async function fetchBibliotheque(){
   const { data } = await sb.from('bibliotheque_taches').select('*').eq('entreprise_id', state.entreprise.id).order('code');
   return data || [];
 }
-function drawerTache(main){
+async function drawerTache(main){
+  const { data: stockItems } = await sb.from('stock').select('*').eq('entreprise_id', state.entreprise.id).order('designation');
   openDrawer('Nouvelle tâche', `
     <form id="form-tache">
       <div class="form-grid">
@@ -842,10 +880,14 @@ function drawerTache(main){
         <div class="field"><label>Catégorie</label><input name="categorie"></div>
         <div class="field"><label>Temps unitaire (h)</label><input name="temps_unitaire" type="number" step="0.25" required></div>
         <div class="field"><label>Unité</label><input name="unite" placeholder="pièce, forfait…"></div>
-        <div class="field"><label>Consommable</label><input name="consommable"></div>
+        <div class="field"><label>Consommable (libellé)</label><input name="consommable"></div>
         <div class="field"><label>Qté conso / unité</label><input name="qte_consommable" type="number" step="0.1" value="0"></div>
         <div class="field"><label>Coût unit. conso (€)</label><input name="cout_unitaire_conso" type="number" step="0.1" value="0"></div>
+        <div class="field"><label>Décompter du stock (optionnel)</label>
+          <select name="stock_id"><option value="">— aucun —</option>${(stockItems||[]).map(s=>`<option value="${s.id}">${esc(s.designation)}</option>`).join('')}</select>
+        </div>
       </div>
+      <div class="view-sub" style="margin-top:4px">Si lié, confirmer un devis contenant cette tâche décompte automatiquement « Qté conso / unité » × quantité de la ligne dans l'article de stock choisi.</div>
       <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="tache-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
     </form>`, () => {
     document.getElementById('tache-cancel').onclick = closeDrawer;
@@ -856,6 +898,7 @@ function drawerTache(main){
         entreprise_id: state.entreprise.id, code: fd.get('code'), intitule: fd.get('intitule'), categorie: fd.get('categorie'),
         temps_unitaire: Number(fd.get('temps_unitaire')), unite: fd.get('unite'), consommable: fd.get('consommable'),
         qte_consommable: Number(fd.get('qte_consommable')||0), cout_unitaire_conso: Number(fd.get('cout_unitaire_conso')||0),
+        stock_id: fd.get('stock_id') || null,
       });
       if (error) return toast('Erreur : ' + error.message);
       closeDrawer(); toast('Tâche ajoutée.'); viewBibliotheque(main);
@@ -935,8 +978,8 @@ function drawerDevis(main, list, clients){
   });
 }
 
-const DEVIS_STATUTS = ['Devis envoye','Accepte','En cours','Termine'];
-const DEVIS_STATUT_LABELS = {'Devis envoye':'Devis envoyé','Accepte':'Accepté','En cours':'En cours','Termine':'Terminé'};
+const DEVIS_STATUTS = ['Devis envoye','Accepte','Refuse'];
+const DEVIS_STATUT_LABELS = {'Devis envoye':'Devis envoyé','Accepte':'Accepté','Refuse':'Refusé','En cours':'En cours (legacy)','Termine':'Terminé (legacy)'};
 
 async function viewDevis(main, term){
   const [{ data: devisList }, taches, { data: clients }] = await Promise.all([
@@ -1018,14 +1061,14 @@ async function viewDevis(main, term){
       <div class="pane-detail" id="devis-detail"></div>
     </div>`;
     body.querySelectorAll('[data-select-devis]').forEach(b => b.onclick = () => { state.selectedDevisId = b.dataset.selectDevis; viewDevis(main, term); });
-    if (selected) await renderDevisDetail(selected, taches);
+    if (selected) await renderDevisDetail(main, selected, taches);
   }
 }
 
 async function creerCommandeDepuisDevis(devis){
   const { data: existing } = await sb.from('commandes_clients').select('*').eq('devis_id', devis.id).maybeSingle();
   if (existing) return existing;
-  const { data: lignes } = await sb.from('devis_lignes').select('*').eq('devis_id', devis.id).order('created_at');
+  const { data: lignes } = await sb.from('devis_lignes').select('*').eq('devis_id', devis.id).order('ordre');
   const totalHT = (lignes||[]).reduce((s,l)=>s+Number(l.total_ligne||0),0);
   const { data: numero, error: numErr } = await sb.rpc('prochain_numero', { p_entreprise_id: state.entreprise.id, p_type: 'commande_client', p_prefixe: 'CDE' });
   if (numErr){ toast('Erreur numérotation commande : ' + numErr.message); return null; }
@@ -1039,31 +1082,46 @@ async function creerCommandeDepuisDevis(devis){
       commande_id: commande.id, designation: l.designation, quantite: 1,
       prix_unitaire_ht: Number(l.total_ligne||0), taux_tva: Number(devis.taux_tva||0), total_ht: Number(l.total_ligne||0),
     })));
+    // decompte automatique du stock lie aux taches de ce devis (consommable rattache a un article de stock)
+    for (const l of lignes){
+      if (!l.tache_id) continue;
+      const { data: tache } = await sb.from('bibliotheque_taches').select('stock_id, qte_consommable').eq('id', l.tache_id).maybeSingle();
+      if (tache?.stock_id && tache.qte_consommable){
+        const { data: art } = await sb.from('stock').select('quantite').eq('id', tache.stock_id).maybeSingle();
+        if (art){
+          const nouvelleQte = Math.max(0, Number(art.quantite||0) - Number(l.quantite||1) * Number(tache.qte_consommable||0));
+          await sb.from('stock').update({ quantite: nouvelleQte }).eq('id', tache.stock_id);
+        }
+      }
+    }
   }
   return commande;
 }
 
-async function renderDevisDetail(devis, taches){
+async function renderDevisDetail(main, devis, taches){
   const detail = document.getElementById('devis-detail');
-  const { data: lignes } = await sb.from('devis_lignes').select('*').eq('devis_id', devis.id).order('created_at');
+  const { data: lignes } = await sb.from('devis_lignes').select('*').eq('devis_id', devis.id).order('ordre');
   const totalHT = (lignes||[]).reduce((s,l)=>s+Number(l.total_ligne||0),0);
   const tauxTva = Number(devis.taux_tva||0);
   const totalTVA = totalHT * tauxTva / 100;
   const totalTTC = totalHT + totalTVA;
   const acomptePct = Number(devis.acompte_demande_pct||0);
   const montantAcompte = totalTTC * acomptePct / 100;
-  const statuts = ['Devis envoye','Accepte','En cours','Termine'];
-  const statutLabels = {'Devis envoye':'Devis envoyé','Accepte':'Accepté','En cours':'En cours','Termine':'Terminé'};
+  const dejaCommande = DEVIS_STATUTS.includes(devis.statut) ? devis.statut !== 'Devis envoye' : true;
   detail.innerHTML = `
     <div class="card">
       <div class="card-row">
         <h3 style="margin:0">${esc(devis.numero||devis.numero_chantier)} — ${esc(devis.client_nom||'client ponctuel')} <span style="color:var(--fg-muted);font-weight:400;font-size:13px">(chantier ${esc(devis.numero_chantier)})</span></h3>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn-ghost btn-sm" id="devis-print" type="button">Imprimer / PDF</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" id="devis-print" type="button">Imprimer</button>
+          <button class="btn btn-ghost btn-sm" id="devis-download" type="button">Télécharger PDF</button>
           <button class="btn btn-ghost btn-sm" id="devis-email" type="button">Envoyer par email</button>
+          <button class="btn btn-ghost btn-sm" id="devis-copy" type="button">Copier le texte</button>
           <select id="devis-statut" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)">
-            ${statuts.map(s=>`<option value="${s}" ${s===devis.statut?'selected':''}>${statutLabels[s]}</option>`).join('')}
+            ${DEVIS_STATUTS.map(s=>`<option value="${s}" ${s===devis.statut?'selected':''}>${DEVIS_STATUT_LABELS[s]}</option>`).join('')}
+            ${!DEVIS_STATUTS.includes(devis.statut) ? `<option value="${devis.statut}" selected>${DEVIS_STATUT_LABELS[devis.statut]||devis.statut}</option>` : ''}
           </select>
+          ${!dejaCommande ? `<button class="btn btn-primary btn-sm" id="devis-confirmer-commande" type="button">Confirmer en commande</button>` : ''}
         </div>
       </div>
       <div class="form-grid" style="margin-bottom:14px">
@@ -1082,11 +1140,13 @@ async function renderDevisDetail(devis, taches){
         <div class="field"><label>Quantité</label><input name="quantite" type="number" step="0.5" value="1" required></div>
         <div class="field"><button class="btn btn-ghost" type="submit">+ Ajouter la ligne</button></div>
       </form>
+      <div class="view-sub" style="margin-bottom:6px">Glisse ⠿ pour réordonner les lignes — l'ordre est repris tel quel sur le PDF.</div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Tâche</th><th class="num">Qté</th><th class="num">Temps (h)</th><th class="num">Main d'œuvre</th><th class="num">Conso</th><th class="num">Total</th><th></th></tr></thead>
-        <tbody>
+        <thead><tr><th></th><th>Tâche</th><th class="num">Qté</th><th class="num">Temps (h)</th><th class="num">Main d'œuvre</th><th class="num">Conso</th><th class="num">Total</th><th></th></tr></thead>
+        <tbody id="devis-lignes-body">
           ${(lignes&&lignes.length) ? lignes.map(l => `
-            <tr>
+            <tr draggable="true" data-ligne-id="${l.id}" style="cursor:grab">
+              <td style="color:var(--fg-muted)">⠿</td>
               <td>${esc(l.designation||l.code_tache)}</td>
               <td class="num">${num(l.quantite)}</td>
               <td class="num">${num(l.temps_total)}</td>
@@ -1094,35 +1154,60 @@ async function renderDevisDetail(devis, taches){
               <td class="num">${money(l.prix_consommables)}</td>
               <td class="num"><strong>${money(l.total_ligne)}</strong></td>
               <td><button class="btn btn-ghost btn-sm" data-del-ligne="${l.id}">×</button></td>
-            </tr>`).join('') : emptyRow(7,'Aucune ligne pour ce devis.')}
+            </tr>`).join('') : emptyRow(8,'Aucune ligne pour ce devis.')}
         </tbody>
         <tfoot>
-          <tr><td colspan="5" style="text-align:right;font-weight:600">Total HT</td><td class="num" style="font-weight:700">${money(totalHT)}</td><td></td></tr>
-          <tr><td colspan="5" style="text-align:right;color:var(--fg-muted)">TVA (${num(tauxTva,1)}%)</td><td class="num">${money(totalTVA)}</td><td></td></tr>
-          <tr><td colspan="5" style="text-align:right;font-weight:700">Total TTC</td><td class="num" style="font-weight:700">${money(totalTTC)}</td><td></td></tr>
-          ${acomptePct>0 ? `<tr><td colspan="5" style="text-align:right;color:var(--accent)">Acompte demandé (${num(acomptePct,0)}%)</td><td class="num" style="color:var(--accent)">${money(montantAcompte)}</td><td></td></tr>` : ''}
+          <tr><td></td><td colspan="4" style="text-align:right;font-weight:600">Total HT</td><td class="num" style="font-weight:700">${money(totalHT)}</td><td></td></tr>
+          <tr><td></td><td colspan="4" style="text-align:right;color:var(--fg-muted)">TVA (${num(tauxTva,1)}%)</td><td class="num">${money(totalTVA)}</td><td></td></tr>
+          <tr><td></td><td colspan="4" style="text-align:right;font-weight:700">Total TTC</td><td class="num" style="font-weight:700">${money(totalTTC)}</td><td></td></tr>
+          ${acomptePct>0 ? `<tr><td></td><td colspan="4" style="text-align:right;color:var(--accent)">Acompte demandé (${num(acomptePct,0)}%)</td><td class="num" style="color:var(--accent)">${money(montantAcompte)}</td><td></td></tr>` : ''}
         </tfoot>
       </table></div>
+      <div class="field" style="margin-top:14px">
+        <label>Notes / texte libre (conditions particulières, description détaillée…) — affiché sur le PDF</label>
+        <textarea id="devis-notes" rows="4" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:13px">${esc(devis.notes_libres||'')}</textarea>
+        <div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="devis-save-notes" type="button">Enregistrer les notes</button></div>
+      </div>
     </div>`;
 
   const docPourImpression = () => ({
     numero: devis.numero || devis.numero_chantier, date: devis.date, numeroChantier: devis.numero_chantier,
     clientNom: devis.client_nom, tauxTva, totalHT, totalTVA, totalTTC,
-    extraLine: acomptePct > 0 ? `Acompte demandé à la commande (${num(acomptePct,0)}%) : ${money(montantAcompte)}` : (devis.validite_jours ? `Devis valable ${devis.validite_jours} jours.` : ''),
+    extraLine: [
+      acomptePct > 0 ? `Acompte demandé à la commande (${num(acomptePct,0)}%) : ${money(montantAcompte)}.` : '',
+      devis.validite_jours ? `Devis valable ${devis.validite_jours} jours.` : '',
+      devis.notes_libres || '',
+    ].filter(Boolean).join(' '),
     lignes: (lignes||[]).map(l => ({ designation: l.designation, quantite: l.quantite, pu: Number(l.total_ligne||0)/Number(l.quantite||1), tva: tauxTva, total: l.total_ligne })),
   });
   document.getElementById('devis-print').onclick = () => printDoc('Devis', docPourImpression());
+  document.getElementById('devis-download').onclick = () => downloadDoc('Devis', docPourImpression());
   document.getElementById('devis-email').onclick = () => emailDoc('Devis', docPourImpression(), devis.client_id);
+  document.getElementById('devis-copy').onclick = () => copyDocEmailText('Devis', docPourImpression(), devis.client_id);
   document.getElementById('devis-statut').onchange = async (e) => {
     const nouveauStatut = e.target.value;
     const { error } = await sb.from('devis').update({ statut: nouveauStatut }).eq('id', devis.id);
     if (error) return toast('Erreur : ' + error.message);
+    devis.statut = nouveauStatut;
     if (nouveauStatut === 'Accepte'){
       const commande = await creerCommandeDepuisDevis(devis);
       toast(commande ? `Devis accepté → commande ${commande.numero} créée.` : 'Statut mis à jour.');
     } else {
       toast('Statut mis à jour.');
     }
+    renderDevisDetail(main, devis, taches);
+  };
+  const btnConfirmer = document.getElementById('devis-confirmer-commande');
+  if (btnConfirmer) btnConfirmer.onclick = async () => {
+    const { error } = await sb.from('devis').update({ statut: 'Accepte' }).eq('id', devis.id);
+    if (error) return toast('Erreur : ' + error.message);
+    devis.statut = 'Accepte';
+    const commande = await creerCommandeDepuisDevis(devis);
+    if (!commande) return;
+    toast(`Devis accepté → commande ${commande.numero} créée.`);
+    state.view = 'commandes'; state.selectedCommandeClientId = commande.id;
+    updateNavActive();
+    await viewCommandes(document.getElementById('main'));
   };
   document.getElementById('devis-save-cond').onclick = async () => {
     const { error } = await sb.from('devis').update({
@@ -1133,7 +1218,14 @@ async function renderDevisDetail(devis, taches){
     if (error) return toast('Erreur : ' + error.message);
     devis.taux_tva = Number(document.getElementById('devis-tva').value||0);
     devis.acompte_demande_pct = Number(document.getElementById('devis-acompte').value||0);
-    toast('Conditions mises à jour.'); renderDevisDetail(devis, taches);
+    toast('Conditions mises à jour.'); renderDevisDetail(main, devis, taches);
+  };
+  document.getElementById('devis-save-notes').onclick = async () => {
+    const texte = document.getElementById('devis-notes').value;
+    const { error } = await sb.from('devis').update({ notes_libres: texte }).eq('id', devis.id);
+    if (error) return toast('Erreur : ' + error.message);
+    devis.notes_libres = texte;
+    toast('Notes enregistrées.');
   };
   document.getElementById('form-ligne').onsubmit = async (e) => {
     e.preventDefault();
@@ -1149,14 +1241,32 @@ async function renderDevisDetail(devis, taches){
       devis_id: devis.id, tache_id: tache.id, code_tache: tache.code, designation: tache.intitule,
       quantite: qte, temps_unitaire: tache.temps_unitaire, temps_total: tempsTotal,
       prix_main_oeuvre: prixMO, prix_consommables: prixConso, total_ligne: prixMO + prixConso,
+      ordre: (lignes||[]).length,
     });
     if (error) return toast('Erreur : ' + error.message);
-    toast('Ligne ajoutée.'); renderDevisDetail(devis, taches);
+    toast('Ligne ajoutée.'); renderDevisDetail(main, devis, taches);
   };
   detail.querySelectorAll('[data-del-ligne]').forEach(b => b.onclick = async () => {
     const { error } = await sb.from('devis_lignes').delete().eq('id', b.dataset.delLigne);
     if (error) return toast('Erreur : ' + error.message);
-    toast('Ligne retirée.'); renderDevisDetail(devis, taches);
+    toast('Ligne retirée.'); renderDevisDetail(main, devis, taches);
+  });
+
+  let dragSrcId = null;
+  detail.querySelectorAll('[data-ligne-id]').forEach(row => {
+    row.ondragstart = (e) => { dragSrcId = row.dataset.ligneId; e.dataTransfer.effectAllowed = 'move'; };
+    row.ondragover = (e) => { e.preventDefault(); };
+    row.ondrop = async (e) => {
+      e.preventDefault();
+      const targetId = row.dataset.ligneId;
+      if (!dragSrcId || dragSrcId === targetId) return;
+      const ids = (lignes||[]).map(l => l.id);
+      const from = ids.indexOf(dragSrcId), to = ids.indexOf(targetId);
+      if (from === -1 || to === -1) return;
+      ids.splice(to, 0, ids.splice(from, 1)[0]);
+      await Promise.all(ids.map((id, i) => sb.from('devis_lignes').update({ ordre: i }).eq('id', id)));
+      renderDevisDetail(main, devis, taches);
+    };
   });
 }
 
@@ -1210,8 +1320,10 @@ async function renderCommandeClientDetail(main, commande){
       <div class="card-row">
         <h3 style="margin:0">${esc(commande.numero)} — ${esc(commande.client_nom||'client ponctuel')}</h3>
         <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn-ghost btn-sm" id="commande-client-print" type="button">Imprimer / PDF</button>
+          <button class="btn btn-ghost btn-sm" id="commande-client-print" type="button">Imprimer</button>
+          <button class="btn btn-ghost btn-sm" id="commande-client-download" type="button">Télécharger PDF</button>
           <button class="btn btn-ghost btn-sm" id="commande-client-email" type="button">Envoyer par email</button>
+          <button class="btn btn-ghost btn-sm" id="commande-client-copy" type="button">Copier le texte</button>
           <select id="commande-client-statut" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)">
             ${statuts.map(s=>`<option value="${s}" ${s===commande.statut?'selected':''}>${statutLabels[s]}</option>`).join('')}
           </select>
@@ -1244,7 +1356,9 @@ async function renderCommandeClientDetail(main, commande){
     lignes: (lignes||[]).map(l => ({ designation: l.designation, quantite: l.quantite, pu: l.prix_unitaire_ht, tva: l.taux_tva, total: l.total_ht })),
   });
   document.getElementById('commande-client-print').onclick = () => printDoc('Bon de commande', docPourImpression());
+  document.getElementById('commande-client-download').onclick = () => downloadDoc('Bon de commande', docPourImpression());
   document.getElementById('commande-client-email').onclick = () => emailDoc('Bon de commande', docPourImpression(), commande.client_id);
+  document.getElementById('commande-client-copy').onclick = () => copyDocEmailText('Bon de commande', docPourImpression(), commande.client_id);
   document.getElementById('commande-client-facturer').onclick = async () => {
     state.view = 'factures';
     updateNavActive();
@@ -1571,8 +1685,10 @@ async function renderFactureDetail(facture){
       <div class="card-row">
         <h3 style="margin:0">${esc(facture.numero_facture)} — ${esc(facture.client_nom||'client ponctuel')}</h3>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-ghost btn-sm" id="facture-print" type="button">Imprimer / PDF</button>
+          <button class="btn btn-ghost btn-sm" id="facture-print" type="button">Imprimer</button>
+          <button class="btn btn-ghost btn-sm" id="facture-download" type="button">Télécharger PDF</button>
           <button class="btn btn-ghost btn-sm" id="facture-email" type="button">Envoyer par email</button>
+          <button class="btn btn-ghost btn-sm" id="facture-copy" type="button">Copier le texte</button>
           ${facture.statut!=='Payee' && facture.type!=='Avoir' ? `<button class="btn btn-ghost btn-sm" id="btn-pay-facture">Marquer payée</button>` : ''}
           ${facture.type!=='Avoir' ? `<button class="btn btn-ghost btn-sm" id="btn-avoir-facture">Générer un avoir</button>` : ''}
         </div>
@@ -1610,16 +1726,18 @@ async function renderFactureDetail(facture){
     await sb.from('factures').update({ montant_ht: ht, tva, montant_ttc: ht+tva }).eq('id', facture.id);
   };
 
-  document.getElementById('facture-print').onclick = () => printDoc(facture.type==='Avoir'?'Avoir':'Facture', {
+  const factureTypeLabel = facture.type==='Avoir' ? 'Avoir' : 'Facture';
+  const docPourImpression = () => ({
     numero: facture.numero_facture, date: facture.date_emission, numeroChantier: facture.numero_chantier,
     clientNom: facture.client_nom, tauxTva: facture.montant_ht ? (facture.tva/facture.montant_ht*100) : (state.entreprise.taux_tva||0),
     totalHT: facture.montant_ht, totalTVA: facture.tva, totalTTC: facture.montant_ttc,
     conditionsPaiement: base?.conditions_paiement, extraLine: facture.date_echeance ? `Échéance : ${facture.date_echeance}` : '',
     lignes: (lignes||[]).map(l => ({ designation: l.designation, quantite: l.quantite, pu: l.prix_unitaire_ht, tva: l.taux_tva, total: l.total_ht })),
   });
-  document.getElementById('facture-email').onclick = () => emailDoc(facture.type==='Avoir'?'Avoir':'Facture', {
-    numero: facture.numero_facture, totalTTC: facture.montant_ttc,
-  }, base?.client_id);
+  document.getElementById('facture-print').onclick = () => printDoc(factureTypeLabel, docPourImpression());
+  document.getElementById('facture-download').onclick = () => downloadDoc(factureTypeLabel, docPourImpression());
+  document.getElementById('facture-email').onclick = () => emailDoc(factureTypeLabel, docPourImpression(), base?.client_id);
+  document.getElementById('facture-copy').onclick = () => copyDocEmailText(factureTypeLabel, docPourImpression(), base?.client_id);
 
   document.getElementById('form-facture-ligne').onsubmit = async (e) => {
     e.preventDefault();
@@ -1787,10 +1905,11 @@ function drawerCommande(main, fournisseurs){
   });
 }
 async function viewAchats(main, term){
-  const [{ data: fournisseurs }, { data: commandes }, { data: stockItems }] = await Promise.all([
+  const [{ data: fournisseurs }, { data: commandes }, { data: stockItems }, { data: facturesAchats }] = await Promise.all([
     sb.from('fournisseurs').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
     sb.from('commandes_fournisseurs').select('*').eq('entreprise_id', state.entreprise.id).order('date_commande', { ascending:false }),
     sb.from('stock').select('*').eq('entreprise_id', state.entreprise.id).order('designation'),
+    sb.from('factures_achats').select('*').eq('entreprise_id', state.entreprise.id).order('date_facture', { ascending:false }),
   ]);
   const filteredCommandes = filterRows(commandes||[], term, ['numero','fournisseur_nom']);
   if (!state.selectedCommandeId && commandes && commandes.length) state.selectedCommandeId = commandes[0].id;
@@ -1821,16 +1940,37 @@ async function viewAchats(main, term){
           </div>`).join('') : `<div class="meta">${(commandes&&commandes.length)?'Aucun résultat.':'Aucun bon de commande.'}</div>`}
       </div>
       <div class="pane-detail" id="commande-detail"></div>
+    </div>
+    <div class="card">
+      <div class="card-row"><h3 style="margin:0">Factures fournisseurs</h3><button class="btn btn-ghost btn-sm btn-new" id="facture-achat-new">${ICONS.plus} Nouvelle facture</button></div>
+      <div class="view-sub" style="margin-bottom:10px">Ce qu'on doit payer — clôture le cycle Commande → Réception → Facture.</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>N° fournisseur</th><th>Fournisseur</th><th>Date</th><th class="num">TTC</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          ${(facturesAchats&&facturesAchats.length) ? facturesAchats.map(fa => `
+            <tr>
+              <td>${esc(fa.numero_fournisseur||'—')}</td><td>${esc(fa.fournisseur_nom||'—')}</td><td>${esc(fa.date_facture)}</td>
+              <td class="num">${money(fa.montant_ttc)}</td>
+              <td>${fa.statut_paiement==='Payee' ? '<span class="pill pill-ok">Payée</span>' : '<span class="pill pill-warn">À payer</span>'}</td>
+              <td>${fa.statut_paiement!=='Payee' ? `<button class="btn btn-ghost btn-sm" data-pay-facture-achat="${fa.id}">Marquer payée</button>` : ''}</td>
+            </tr>`).join('') : emptyRow(6,'Aucune facture fournisseur.')}
+        </tbody>
+      </table></div>
     </div>`;
 
   document.getElementById('fournisseur-new').onclick = () => drawerFournisseur(main);
   document.getElementById('commande-new').onclick = () => drawerCommande(main, fournisseurs||[]);
+  document.getElementById('facture-achat-new').onclick = () => drawerFactureAchat(main, fournisseurs||[], commandes||[]);
   document.getElementById('commandes-search').oninput = (e) => viewAchats(main, e.target.value);
   main.querySelectorAll('[data-select-commande]').forEach(b => b.onclick = () => { state.selectedCommandeId = b.dataset.selectCommande; viewAchats(main, term); });
-  if (selected) await renderCommandeDetail(selected, stockItems||[]);
+  main.querySelectorAll('[data-pay-facture-achat]').forEach(b => b.onclick = async () => {
+    await sb.from('factures_achats').update({ statut_paiement: 'Payee', date_paiement: todayISO() }).eq('id', b.dataset.payFactureAchat);
+    toast('Marquée payée.'); viewAchats(main, term);
+  });
+  if (selected) await renderCommandeDetail(main, selected, stockItems||[], fournisseurs||[], commandes||[]);
 }
 
-async function renderCommandeDetail(commande, stockItems){
+async function renderCommandeDetail(main, commande, stockItems, fournisseurs, commandes){
   const detail = document.getElementById('commande-detail');
   const { data: lignes } = await sb.from('commandes_fournisseurs_lignes').select('*').eq('commande_id', commande.id).order('created_at');
   const total = (lignes||[]).reduce((s,l)=>s+Number(l.total||0),0);
@@ -1838,9 +1978,12 @@ async function renderCommandeDetail(commande, stockItems){
     <div class="card">
       <div class="card-row">
         <h3 style="margin:0">${esc(commande.numero||'Bon de commande')} — ${esc(commande.fournisseur_nom||'—')}</h3>
-        <select id="commande-statut" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)">
-          ${['Commandee','Partiellement recue','Receptionnee'].map(s=>`<option value="${s}" ${s===commande.statut?'selected':''}>${s.replace('Recue','reçue').replace('Receptionnee','Réceptionnée').replace('Commandee','Commandée')}</option>`).join('')}
-        </select>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" id="commande-facturer" type="button">Facturer</button>
+          <select id="commande-statut" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)">
+            ${['Commandee','Partiellement recue','Receptionnee'].map(s=>`<option value="${s}" ${s===commande.statut?'selected':''}>${s.replace('Recue','reçue').replace('Receptionnee','Réceptionnée').replace('Commandee','Commandée')}</option>`).join('')}
+          </select>
+        </div>
       </div>
       <form id="form-commande-ligne" class="form-grid" style="margin-bottom:14px">
         <div class="field"><label>Article stock (optionnel)</label>
@@ -1876,11 +2019,11 @@ async function renderCommandeDetail(commande, stockItems){
     const designation = fd.get('designation') || (stockItems.find(s=>s.id===stockId)?.designation) || '—';
     const { error } = await sb.from('commandes_fournisseurs_lignes').insert({ commande_id: commande.id, stock_id: stockId, designation, quantite: qte, prix_unitaire: pu, total: qte*pu });
     if (error) return toast('Erreur : ' + error.message);
-    toast('Ligne ajoutée.'); renderCommandeDetail(commande, stockItems);
+    toast('Ligne ajoutée.'); renderCommandeDetail(main, commande, stockItems, fournisseurs, commandes);
   };
   detail.querySelectorAll('[data-del-commande-ligne]').forEach(b => b.onclick = async () => {
     await sb.from('commandes_fournisseurs_lignes').delete().eq('id', b.dataset.delCommandeLigne);
-    toast('Ligne retirée.'); renderCommandeDetail(commande, stockItems);
+    toast('Ligne retirée.'); renderCommandeDetail(main, commande, stockItems, fournisseurs, commandes);
   });
   detail.querySelectorAll('[data-recevoir]').forEach(b => b.onclick = async () => {
     const ligne = (lignes||[]).find(l => l.id === b.dataset.recevoir);
@@ -1889,7 +2032,55 @@ async function renderCommandeDetail(commande, stockItems){
       const { data: art } = await sb.from('stock').select('quantite').eq('id', ligne.stock_id).single();
       if (art) await sb.from('stock').update({ quantite: Number(art.quantite||0) + Number(ligne.quantite||0) }).eq('id', ligne.stock_id);
     }
-    toast('Ligne reçue — stock mis à jour.'); renderCommandeDetail(commande, stockItems);
+    toast('Ligne reçue — stock mis à jour.'); renderCommandeDetail(main, commande, stockItems, fournisseurs, commandes);
+  });
+  document.getElementById('commande-facturer').onclick = () => drawerFactureAchat(main, fournisseurs, commandes, commande.id);
+}
+
+function drawerFactureAchat(main, fournisseurs, commandes, preselectCommandeId){
+  const preselect = preselectCommandeId ? (commandes||[]).find(c => c.id === preselectCommandeId) : null;
+  openDrawer('Nouvelle facture fournisseur', `
+    <form id="form-facture-achat">
+      <div class="form-grid">
+        <div class="field"><label>Fournisseur</label>
+          <select name="fournisseur_id" id="fa-fournisseur-select" required><option value="">—</option>${(fournisseurs||[]).map(f=>`<option value="${f.id}" ${preselect&&preselect.fournisseur_id===f.id?'selected':''}>${esc(f.nom)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Depuis un bon de commande (optionnel)</label>
+          <select name="commande_id" id="fa-commande-select">
+            <option value="">— aucun —</option>
+            ${(commandes||[]).map(c=>`<option value="${c.id}" ${c.id===preselectCommandeId?'selected':''}>${esc(c.numero)} — ${esc(c.fournisseur_nom||'—')}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>N° facture fournisseur</label><input name="numero_fournisseur" placeholder="référence du fournisseur"></div>
+        <div class="field"><label>Date facture</label><input name="date_facture" type="date" value="${todayISO()}"></div>
+        <div class="field"><label>Échéance</label><input name="date_echeance" type="date"></div>
+        <div class="field"><label>Montant HT (€)</label><input name="montant_ht" type="number" step="0.1" required></div>
+        <div class="field"><label>TVA (%)</label><input name="taux_tva" type="number" step="0.5" value="${state.entreprise.taux_tva}"></div>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="fa-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>`, () => {
+    document.getElementById('fa-cancel').onclick = closeDrawer;
+    const commandeSelect = document.getElementById('fa-commande-select');
+    commandeSelect.onchange = () => {
+      const c = (commandes||[]).find(x => x.id === commandeSelect.value);
+      if (c) document.getElementById('fa-fournisseur-select').value = c.fournisseur_id || '';
+    };
+    document.getElementById('form-facture-achat').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const four = (fournisseurs||[]).find(f=>f.id===fd.get('fournisseur_id'));
+      const ht = Number(fd.get('montant_ht')||0);
+      const tauxTva = Number(fd.get('taux_tva')||0);
+      const tva = ht * tauxTva / 100;
+      const { error } = await sb.from('factures_achats').insert({
+        entreprise_id: state.entreprise.id, fournisseur_id: four?.id||null, fournisseur_nom: four?.nom||null,
+        commande_id: fd.get('commande_id')||null, numero_fournisseur: fd.get('numero_fournisseur')||null,
+        date_facture: fd.get('date_facture')||todayISO(), date_echeance: fd.get('date_echeance')||null,
+        montant_ht: ht, tva, montant_ttc: ht+tva,
+      });
+      if (error) return toast('Erreur : ' + error.message);
+      closeDrawer(); toast('Facture fournisseur enregistrée.'); viewAchats(main);
+    };
   });
 }
 
@@ -2052,31 +2243,45 @@ function drawerSousTraitant(main){
     };
   });
 }
-function drawerSousChantier(main, sousTraitants){
+function drawerSousChantier(main, sousTraitants, commandes){
   openDrawer('Nouveau montant sous-traitance', `
     <form id="form-sous-chantier">
       <div class="form-grid">
         <div class="field"><label>Sous-traitant</label><select name="sous_traitant_id" required><option value="">—</option>${(sousTraitants||[]).map(s=>`<option value="${s.id}">${esc(s.nom)}</option>`).join('')}</select></div>
-        <div class="field"><label>N° chantier</label><input name="numero_chantier"></div>
+        <div class="field"><label>Commande client liée (optionnel)</label>
+          <select name="commande_id" id="stc-commande-select">
+            <option value="">— aucune —</option>
+            ${(commandes||[]).map(c=>`<option value="${c.id}" data-chantier="${esc(c.numero_chantier||'')}">${esc(c.numero)} — ${esc(c.client_nom||'—')}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>N° chantier</label><input name="numero_chantier" id="stc-chantier-input"></div>
         <div class="field"><label>Montant HT (€)</label><input name="montant_ht" type="number" step="10" required></div>
       </div>
       <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="sous-chantier-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
     </form>`, () => {
     document.getElementById('sous-chantier-cancel').onclick = closeDrawer;
+    document.getElementById('stc-commande-select').onchange = (e) => {
+      const opt = e.target.selectedOptions[0];
+      if (opt?.dataset.chantier) document.getElementById('stc-chantier-input').value = opt.dataset.chantier;
+    };
     document.getElementById('form-sous-chantier').onsubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       const st = (sousTraitants||[]).find(s=>s.id===fd.get('sous_traitant_id'));
-      const { error } = await sb.from('sous_traitance_chantiers').insert({ entreprise_id: state.entreprise.id, sous_traitant_id: st?.id, sous_traitant_nom: st?.nom, numero_chantier: fd.get('numero_chantier'), montant_ht: Number(fd.get('montant_ht')||0) });
+      const { error } = await sb.from('sous_traitance_chantiers').insert({
+        entreprise_id: state.entreprise.id, sous_traitant_id: st?.id, sous_traitant_nom: st?.nom,
+        commande_id: fd.get('commande_id')||null, numero_chantier: fd.get('numero_chantier'), montant_ht: Number(fd.get('montant_ht')||0),
+      });
       if (error) return toast('Erreur : ' + error.message);
       closeDrawer(); toast('Montant ajouté.'); viewSousTraitance(main);
     };
   });
 }
 async function viewSousTraitance(main){
-  const [{ data: sousTraitants }, { data: chantiers }] = await Promise.all([
+  const [{ data: sousTraitants }, { data: chantiers }, { data: commandes }] = await Promise.all([
     sb.from('sous_traitants').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
     sb.from('sous_traitance_chantiers').select('*').eq('entreprise_id', state.entreprise.id).order('created_at', { ascending:false }),
+    sb.from('v_commandes_clients').select('*').eq('entreprise_id', state.entreprise.id).order('date_confirmation', { ascending:false }),
   ]);
   main.innerHTML = `
     <div class="view-head"><div><h1>Sous-traitance</h1><div class="view-sub">Sous-traitants et montants à payer par chantier.</div></div></div>
@@ -2102,7 +2307,7 @@ async function viewSousTraitance(main){
       </table></div>
     </div>`;
   document.getElementById('sous-traitant-new').onclick = () => drawerSousTraitant(main);
-  document.getElementById('sous-chantier-new').onclick = () => drawerSousChantier(main, sousTraitants||[]);
+  document.getElementById('sous-chantier-new').onclick = () => drawerSousChantier(main, sousTraitants||[], commandes||[]);
   main.querySelectorAll('[data-pay-soustraitant]').forEach(b => b.onclick = async () => {
     await sb.from('sous_traitance_chantiers').update({ statut_paiement:'Paye', date_paiement: todayISO() }).eq('id', b.dataset.paySoustraitant);
     toast('Marqué payé.'); viewSousTraitance(main);
