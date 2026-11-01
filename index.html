@@ -289,6 +289,7 @@ function buildDocFragment(typeLabel, doc){
     <div class="print-doc">
       <div class="print-head">
         <div>
+          ${ent.logo_url ? `<img src="${esc(ent.logo_url)}" alt="" style="max-height:44px;max-width:180px;object-fit:contain;display:block;margin-bottom:8px">` : ''}
           <div class="print-ent-nom">${esc(ent.nom||'')}</div>
           ${ent.adresse ? `<div>${esc(ent.adresse)}</div>` : ''}
           ${ent.forme_juridique ? `<div>${esc(ent.forme_juridique)}</div>` : ''}
@@ -303,7 +304,7 @@ function buildDocFragment(typeLabel, doc){
         </div>
       </div>
       <div class="print-client">
-        <div class="print-client-label">Client</div>
+        <div class="print-client-label">${esc(doc.destinataireLabel || 'Client')}</div>
         <div>${esc(doc.clientNom || 'Client ponctuel')}</div>
       </div>
       <table class="print-table">
@@ -331,7 +332,24 @@ function printDoc(typeLabel, doc){
   document.getElementById('print-area').innerHTML = buildDocFragment(typeLabel, doc);
   window.print();
 }
-function buildPdfDoc(typeLabel, doc){
+function loadImageAsPngDataUrl(url){
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 200; canvas.height = img.naturalHeight || 200;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve({ dataUrl: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
+      } catch (e){ resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+async function buildPdfDoc(typeLabel, doc){
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
   const ent = state.entreprise;
@@ -339,6 +357,16 @@ function buildPdfDoc(typeLabel, doc){
   const teal = [11,74,70], gray = [100,100,100], black = [20,20,20];
   let y = 20;
   const checkPageBreak = (needed) => { if (y + needed > pageBottom){ pdf.addPage(); y = 20; } };
+
+  if (ent.logo_url){
+    const img = await loadImageAsPngDataUrl(ent.logo_url);
+    if (img && img.w && img.h){
+      const maxW = 38, maxH = 16;
+      let w = maxW, h = maxW / img.w * img.h;
+      if (h > maxH){ h = maxH; w = maxH / img.h * img.w; }
+      try { pdf.addImage(img.dataUrl, 'PNG', marginL, y - 5, w, h); y += h + 3; } catch (e){}
+    }
+  }
 
   pdf.setFont('helvetica','bold'); pdf.setFontSize(14); pdf.setTextColor(...black);
   pdf.text(ent.nom || '', marginL, y);
@@ -361,7 +389,7 @@ function buildPdfDoc(typeLabel, doc){
   y += 8;
 
   pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.setTextColor(...gray);
-  pdf.text('CLIENT', marginL, y); y += 4.5;
+  pdf.text((doc.destinataireLabel || 'CLIENT').toUpperCase(), marginL, y); y += 4.5;
   pdf.setFont('helvetica','normal'); pdf.setFontSize(11); pdf.setTextColor(...black);
   pdf.text(doc.clientNom || 'Client ponctuel', marginL, y); y += 9;
 
@@ -428,9 +456,10 @@ function buildPdfDoc(typeLabel, doc){
   }
   return pdf;
 }
-function downloadDoc(typeLabel, doc){
+async function downloadDoc(typeLabel, doc){
   try {
-    const pdf = buildPdfDoc(typeLabel, doc);
+    toast('Génération du PDF…');
+    const pdf = await buildPdfDoc(typeLabel, doc);
     const filename = `${typeLabel}_${doc.numero}`.replace(/[^\w.-]+/g, '_') + '.pdf';
     pdf.save(filename);
     toast('PDF téléchargé.');
@@ -443,28 +472,74 @@ async function getClientEmail(clientId){
   const { data } = await sb.from('clients').select('email').eq('id', clientId).maybeSingle();
   return data?.email || null;
 }
-function emailSubjectBody(typeLabel, doc){
+function emailSubjectBody(typeLabel, doc, kind){
+  if (kind === 'relance'){
+    const subject = `Relance — ${typeLabel} ${doc.numero} en attente de règlement`;
+    const body = `Bonjour,\n\nSauf erreur de notre part, nous n'avons pas encore reçu le règlement de notre ${typeLabel.toLowerCase()} n° ${doc.numero} d'un montant de ${money(doc.totalTTC)} TTC${doc.extraLine?` (échéance : ${doc.extraLine.replace('Échéance : ','')})`:''}.\n\nMerci de bien vouloir procéder au règlement dans les meilleurs délais, ou de nous indiquer si un problème empêche le paiement.\n\nCordialement,\n${state.entreprise.nom}`;
+    return { subject, body };
+  }
+  if (kind === 'fournisseur'){
+    const subject = `${typeLabel} ${doc.numero} — ${state.entreprise.nom}`;
+    const body = `Bonjour,\n\nVeuillez trouver ci-joint notre ${typeLabel.toLowerCase()} n° ${doc.numero} (${money(doc.totalTTC)} TTC).\nMerci de bien vouloir nous confirmer la bonne réception et le délai de livraison.\nPensez à joindre le PDF téléchargé via le bouton "Télécharger PDF".\n\nCordialement,\n${state.entreprise.nom}`;
+    return { subject, body };
+  }
   const subject = `${typeLabel} ${doc.numero} — ${state.entreprise.nom}`;
   const body = `Bonjour,\n\nVeuillez trouver ci-joint notre ${typeLabel.toLowerCase()} n° ${doc.numero} (${money(doc.totalTTC)} TTC).\nPensez à joindre le PDF téléchargé via le bouton "Télécharger PDF".\n\nCordialement,\n${state.entreprise.nom}`;
   return { subject, body };
 }
-async function emailDoc(typeLabel, doc, clientId){
-  const email = await getClientEmail(clientId);
-  const { subject, body } = emailSubjectBody(typeLabel, doc);
-  if (!email){ toast("Aucun email enregistré pour ce client."); }
-  const win = window.open(`mailto:${email||''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
-  setTimeout(() => { toast("Rien ne s'est ouvert ? Ton navigateur n'a pas de client mail par défaut — utilise \"Copier le texte\" juste à côté."); }, 900);
-}
-async function copyDocEmailText(typeLabel, doc, clientId){
-  const email = await getClientEmail(clientId);
-  const { subject, body } = emailSubjectBody(typeLabel, doc);
-  const full = `${email ? 'À : ' + email + '\n' : ''}Objet : ${subject}\n\n${body}`;
-  try {
-    await navigator.clipboard.writeText(full);
-    toast('Texte copié — colle-le dans Gmail / Outlook.');
-  } catch (e) {
-    toast('Impossible de copier automatiquement : ' + e.message);
+async function copyTextRobust(text){
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (e){
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e2){ return false; }
   }
+}
+function openEmailModal(typeLabel, doc, toEmail, kind){
+  const { subject, body } = emailSubjectBody(typeLabel, doc, kind);
+  openDrawer(`Envoyer « ${typeLabel} ${doc.numero} » par email`, `
+    <div class="field"><label>À</label><input id="email-to" type="email" value="${esc(toEmail||'')}" placeholder="adresse@destinataire.fr"></div>
+    <div class="field" style="margin-top:10px"><label>Objet</label><input id="email-subject" value="${esc(subject)}"></div>
+    <div class="field" style="margin-top:10px">
+      <label>Message</label>
+      <textarea id="email-body" rows="11" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:13px">${esc(body)}</textarea>
+    </div>
+    <div class="view-sub" style="margin-top:8px">Tu peux modifier librement ce texte. Pense à joindre le PDF téléchargé (bouton « Télécharger PDF ») — un navigateur ne peut pas joindre de fichier automatiquement.</div>
+    <div class="drawer-foot" style="margin:18px -20px -18px;flex-wrap:wrap;justify-content:flex-start;gap:8px">
+      <button class="btn btn-ghost" type="button" id="email-copy">Copier le texte</button>
+      <button class="btn btn-ghost" type="button" id="email-copy-address">Copier l'adresse</button>
+      <button class="btn btn-primary" type="button" id="email-open-mailto">Ouvrir dans le client mail</button>
+    </div>`, () => {
+    document.getElementById('email-open-mailto').onclick = () => {
+      const to = document.getElementById('email-to').value;
+      const subj = document.getElementById('email-subject').value;
+      const bod = document.getElementById('email-body').value;
+      window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(bod)}`;
+    };
+    document.getElementById('email-copy').onclick = async () => {
+      const to = document.getElementById('email-to').value;
+      const subj = document.getElementById('email-subject').value;
+      const bod = document.getElementById('email-body').value;
+      const full = (to ? `À : ${to}\n` : '') + `Objet : ${subj}\n\n${bod}`;
+      const ok = await copyTextRobust(full);
+      toast(ok ? 'Texte copié — colle-le dans Gmail / Outlook.' : 'Copie auto impossible : sélectionne le texte ci-dessus (Ctrl+A puis Ctrl+C).');
+    };
+    document.getElementById('email-copy-address').onclick = async () => {
+      const to = document.getElementById('email-to').value;
+      if (!to) return toast("Pas d'adresse renseignée.");
+      const ok = await copyTextRobust(to);
+      toast(ok ? 'Adresse copiée.' : 'Copie impossible — sélectionne-la à la main dans le champ « À ».');
+    };
+  });
+}
+async function emailDoc(typeLabel, doc, clientId, kind){
+  const email = await getClientEmail(clientId);
+  openEmailModal(typeLabel, doc, email, kind);
 }
 
 // ---------- SEARCH FILTER (client-side) ----------
@@ -704,7 +779,7 @@ function renderShell(){
   root.innerHTML = `
     <div class="app">
       <nav class="sidebar">
-        <div class="brand"><div class="brand-mark">AE</div><div class="brand-name">Atelier ERP</div></div>
+        <div class="brand"><div class="brand-mark">${state.entreprise?.logo_url ? `<img src="${esc(state.entreprise.logo_url)}" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:8px">` : 'AE'}</div><div class="brand-name">${esc(state.entreprise?.nom || 'Atelier ERP')}</div></div>
         <div class="nav-search-hint" id="nav-search-hint"><span>${ICONS.search}&nbsp; Rechercher…</span><kbd>Ctrl K</kbd></div>
         ${NAV_GROUPS.map(g => `
           <div class="nav-group">
@@ -851,6 +926,18 @@ async function viewConfig(main){
       </form>
     </div>
     <div class="card">
+      <h3>Logo</h3>
+      <div class="view-sub" style="margin-bottom:12px">Utilisé sur les devis, commandes et factures (PDF + impression) ainsi que dans la barre latérale.</div>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        ${ent.logo_url ? `<img src="${esc(ent.logo_url)}" alt="Logo" style="max-height:60px;max-width:220px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:6px">` : `<div class="view-sub">Aucun logo pour le moment.</div>`}
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="file" id="logo-file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
+          <button class="btn btn-ghost btn-sm" id="logo-upload" type="button">Téléverser</button>
+          ${ent.logo_url ? `<button class="btn btn-ghost btn-sm" id="logo-remove" type="button">Retirer</button>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="card">
       <h3>Mentions légales (devis / factures)</h3>
       <div class="view-sub" style="margin-bottom:12px">Obligatoires sur tout devis/facture BTP — assurance décennale, RC pro, SIRET, coordonnées bancaires.</div>
       <form id="form-legal" class="form-grid">
@@ -920,6 +1007,28 @@ async function viewConfig(main){
     }).eq('id', ent.id);
     if (error) return toast('Erreur : ' + error.message);
     await loadProfil(); toast('Entreprise mise à jour.'); renderShell();
+  };
+  document.getElementById('logo-upload').onclick = async () => {
+    const fileInput = document.getElementById('logo-file');
+    const file = fileInput.files[0];
+    if (!file) return toast('Choisis une image d\'abord.');
+    if (file.size > 2 * 1024 * 1024) return toast('Image trop lourde (max 2 Mo).');
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+    const path = `${ent.id}/logo.${ext}`;
+    toast('Envoi du logo…');
+    const { error: upErr } = await sb.storage.from('logos').upload(path, file, { upsert: true, cacheControl: '3600' });
+    if (upErr) return toast('Erreur upload : ' + upErr.message);
+    const { data: pub } = sb.storage.from('logos').getPublicUrl(path);
+    const logoUrl = pub.publicUrl + '?v=' + Date.now();
+    const { error } = await sb.from('entreprises').update({ logo_url: logoUrl }).eq('id', ent.id);
+    if (error) return toast('Erreur : ' + error.message);
+    await loadProfil(); toast('Logo mis à jour.'); renderShell();
+  };
+  const removeBtn = document.getElementById('logo-remove');
+  if (removeBtn) removeBtn.onclick = async () => {
+    const { error } = await sb.from('entreprises').update({ logo_url: null }).eq('id', ent.id);
+    if (error) return toast('Erreur : ' + error.message);
+    await loadProfil(); toast('Logo retiré.'); renderShell();
   };
   document.getElementById('form-legal').onsubmit = async (e) => {
     e.preventDefault();
@@ -1204,7 +1313,6 @@ async function renderDevisDetail(main, devis, taches){
           <button class="btn btn-ghost btn-sm" id="devis-print" type="button">Imprimer</button>
           <button class="btn btn-ghost btn-sm" id="devis-download" type="button">Télécharger PDF</button>
           <button class="btn btn-ghost btn-sm" id="devis-email" type="button">Envoyer par email</button>
-          <button class="btn btn-ghost btn-sm" id="devis-copy" type="button">Copier le texte</button>
           <select id="devis-statut" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)">
             ${DEVIS_STATUTS.map(s=>`<option value="${s}" ${s===devis.statut?'selected':''}>${DEVIS_STATUT_LABELS[s]}</option>`).join('')}
             ${!DEVIS_STATUTS.includes(devis.statut) ? `<option value="${devis.statut}" selected>${DEVIS_STATUT_LABELS[devis.statut]||devis.statut}</option>` : ''}
@@ -1271,7 +1379,6 @@ async function renderDevisDetail(main, devis, taches){
   document.getElementById('devis-print').onclick = () => printDoc('Devis', docPourImpression());
   document.getElementById('devis-download').onclick = () => downloadDoc('Devis', docPourImpression());
   document.getElementById('devis-email').onclick = () => emailDoc('Devis', docPourImpression(), devis.client_id);
-  document.getElementById('devis-copy').onclick = () => copyDocEmailText('Devis', docPourImpression(), devis.client_id);
   document.getElementById('devis-statut').onchange = async (e) => {
     const nouveauStatut = e.target.value;
     const { error } = await sb.from('devis').update({ statut: nouveauStatut }).eq('id', devis.id);
@@ -1411,7 +1518,6 @@ async function renderCommandeClientDetail(main, commande){
           <button class="btn btn-ghost btn-sm" id="commande-client-print" type="button">Imprimer</button>
           <button class="btn btn-ghost btn-sm" id="commande-client-download" type="button">Télécharger PDF</button>
           <button class="btn btn-ghost btn-sm" id="commande-client-email" type="button">Envoyer par email</button>
-          <button class="btn btn-ghost btn-sm" id="commande-client-copy" type="button">Copier le texte</button>
           <select id="commande-client-statut" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)">
             ${statuts.map(s=>`<option value="${s}" ${s===commande.statut?'selected':''}>${statutLabels[s]}</option>`).join('')}
           </select>
@@ -1446,7 +1552,6 @@ async function renderCommandeClientDetail(main, commande){
   document.getElementById('commande-client-print').onclick = () => printDoc('Bon de commande', docPourImpression());
   document.getElementById('commande-client-download').onclick = () => downloadDoc('Bon de commande', docPourImpression());
   document.getElementById('commande-client-email').onclick = () => emailDoc('Bon de commande', docPourImpression(), commande.client_id);
-  document.getElementById('commande-client-copy').onclick = () => copyDocEmailText('Bon de commande', docPourImpression(), commande.client_id);
   document.getElementById('commande-client-facturer').onclick = async () => {
     state.view = 'factures';
     updateNavActive();
@@ -1776,7 +1881,7 @@ async function renderFactureDetail(facture){
           <button class="btn btn-ghost btn-sm" id="facture-print" type="button">Imprimer</button>
           <button class="btn btn-ghost btn-sm" id="facture-download" type="button">Télécharger PDF</button>
           <button class="btn btn-ghost btn-sm" id="facture-email" type="button">Envoyer par email</button>
-          <button class="btn btn-ghost btn-sm" id="facture-copy" type="button">Copier le texte</button>
+          ${facture.statut==='En retard' ? `<button class="btn btn-ghost btn-sm" id="facture-relancer" type="button" style="color:var(--danger);border-color:var(--danger)">Relancer</button>` : ''}
           ${facture.statut!=='Payee' && facture.type!=='Avoir' ? `<button class="btn btn-ghost btn-sm" id="btn-pay-facture">Marquer payée</button>` : ''}
           ${facture.type!=='Avoir' ? `<button class="btn btn-ghost btn-sm" id="btn-avoir-facture">Générer un avoir</button>` : ''}
         </div>
@@ -1825,7 +1930,8 @@ async function renderFactureDetail(facture){
   document.getElementById('facture-print').onclick = () => printDoc(factureTypeLabel, docPourImpression());
   document.getElementById('facture-download').onclick = () => downloadDoc(factureTypeLabel, docPourImpression());
   document.getElementById('facture-email').onclick = () => emailDoc(factureTypeLabel, docPourImpression(), base?.client_id);
-  document.getElementById('facture-copy').onclick = () => copyDocEmailText(factureTypeLabel, docPourImpression(), base?.client_id);
+  const relancerBtn = document.getElementById('facture-relancer');
+  if (relancerBtn) relancerBtn.onclick = () => emailDoc(factureTypeLabel, docPourImpression(), base?.client_id, 'relance');
 
   document.getElementById('form-facture-ligne').onsubmit = async (e) => {
     e.preventDefault();
@@ -2062,11 +2168,16 @@ async function renderCommandeDetail(main, commande, stockItems, fournisseurs, co
   const detail = document.getElementById('commande-detail');
   const { data: lignes } = await sb.from('commandes_fournisseurs_lignes').select('*').eq('commande_id', commande.id).order('created_at');
   const total = (lignes||[]).reduce((s,l)=>s+Number(l.total||0),0);
+  const tauxTva = Number(state.entreprise.taux_tva||0);
+  const totalTVA = total * tauxTva / 100;
   detail.innerHTML = `
     <div class="card">
       <div class="card-row">
-        <h3 style="margin:0">${esc(commande.numero||'Bon de commande')} — ${esc(commande.fournisseur_nom||'—')}</h3>
-        <div style="display:flex;gap:8px;align-items:center">
+        <h3 style="margin:0">${esc(commande.numero||'Bon de commande')} — ${esc(commande.fournisseur_nom||'—')} ${commande.litige?'<span class="pill pill-bad">Litige</span>':''}</h3>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" id="commande-print" type="button">Imprimer</button>
+          <button class="btn btn-ghost btn-sm" id="commande-download" type="button">Télécharger PDF</button>
+          <button class="btn btn-ghost btn-sm" id="commande-email" type="button">Envoyer par email</button>
           <button class="btn btn-ghost btn-sm" id="commande-facturer" type="button">Facturer</button>
           <select id="commande-statut" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)">
             ${['Commandee','Partiellement recue','Receptionnee'].map(s=>`<option value="${s}" ${s===commande.statut?'selected':''}>${s.replace('Recue','reçue').replace('Receptionnee','Réceptionnée').replace('Commandee','Commandée')}</option>`).join('')}
@@ -2094,7 +2205,33 @@ async function renderCommandeDetail(main, commande, stockItems, fournisseurs, co
         </tbody>
         <tfoot><tr><td colspan="3" style="text-align:right;font-weight:600">Total</td><td class="num" style="font-weight:700">${money(total)}</td><td colspan="2"></td></tr></tfoot>
       </table></div>
+      <div class="field" style="margin-top:14px">
+        <label><input type="checkbox" id="commande-litige-check" ${commande.litige?'checked':''} style="margin-right:6px;vertical-align:middle">Litige avec ce fournisseur (livraison, qualité, prix…)</label>
+        <textarea id="commande-litige-notes" rows="3" placeholder="Détail du litige, échanges, résolution envisagée…" style="width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:13px" ${commande.litige?'':'hidden'}>${esc(commande.litige_notes||'')}</textarea>
+        <div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="commande-litige-save" type="button">Enregistrer</button></div>
+      </div>
     </div>`;
+  document.getElementById('commande-litige-check').onchange = (e) => {
+    document.getElementById('commande-litige-notes').hidden = !e.target.checked;
+  };
+  document.getElementById('commande-litige-save').onclick = async () => {
+    const litige = document.getElementById('commande-litige-check').checked;
+    const litige_notes = document.getElementById('commande-litige-notes').value;
+    const { error } = await sb.from('commandes_fournisseurs').update({ litige, litige_notes }).eq('id', commande.id);
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Litige mis à jour.'); renderCommandeDetail(main, commande, stockItems, fournisseurs, commandes);
+  };
+  const docPourImpression = () => ({
+    numero: commande.numero, date: commande.date_commande, destinataireLabel: 'Fournisseur', clientNom: commande.fournisseur_nom,
+    tauxTva, totalHT: total, totalTVA, totalTTC: total + totalTVA,
+    lignes: (lignes||[]).map(l => ({ designation: l.designation, quantite: l.quantite, pu: l.prix_unitaire, tva: tauxTva, total: l.total })),
+  });
+  document.getElementById('commande-print').onclick = () => printDoc('Bon de commande', docPourImpression());
+  document.getElementById('commande-download').onclick = () => downloadDoc('Bon de commande', docPourImpression());
+  document.getElementById('commande-email').onclick = async () => {
+    const four = (fournisseurs||[]).find(f => f.id === commande.fournisseur_id);
+    openEmailModal('Bon de commande', docPourImpression(), four?.email, 'fournisseur');
+  };
   document.getElementById('commande-statut').onchange = async (e) => {
     await sb.from('commandes_fournisseurs').update({ statut: e.target.value }).eq('id', commande.id);
     toast('Statut mis à jour.');
