@@ -211,14 +211,19 @@ tbody tr:hover{background:var(--surface-2)}
 
 [hidden]{display:none!important}
 
+.mobile-topbar{display:none}
+.mobile-btn{background:none;border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--fg);display:flex;align-items:center;justify-content:center}
+.mobile-btn svg{width:18px;height:18px}
+.mobile-btn:hover{background:var(--surface-2)}
+.mobile-nav-drawer .nav-btn{color:var(--fg)}
+.mobile-nav-drawer .nav-btn.active{background:var(--accent);color:#fff}
 @media (max-width: 760px){
   .app{flex-direction:column}
-  .sidebar{width:100%;flex:none;flex-direction:row;align-items:center;overflow-x:auto;padding:10px 12px;border-right:none;border-bottom:1px solid var(--border);gap:6px}
-  .brand{padding:0 8px 0 0}
-  .nav-spacer{display:none}
-  .nav-foot{border-top:none;margin-top:0;flex-direction:row;padding:0}
-  .nav-ent{display:none}
-  .main{padding:20px 16px 60px 16px}
+  .sidebar{display:none}
+  .mobile-topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);flex:none}
+  .main{padding:16px 14px 60px 14px}
+  .view-head{gap:8px}
+  .drawer-panel{width:100vw}
 }
 </style>
 </head>
@@ -615,6 +620,7 @@ const ICONS = {
   soustraitance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="19" r="3"/><path d="M15 6.5L9 17.5"/></svg>',
   compta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>',
+  menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>',
 };
 const NAV_GROUPS = [
@@ -825,28 +831,48 @@ const NAV = [
   { id:'compta', label:'Compta' },
 ];
 
-function renderShell(){
+function navGroupsHtml(){
   const byId = Object.fromEntries(NAV.map(n => [n.id, n]));
+  return NAV_GROUPS.map(g => `
+    <div class="nav-group">
+      <div class="nav-group-label">${esc(g.label)}</div>
+      ${g.items.map(id => { const n = byId[id]; return `<button class="nav-btn${state.view===id?' active':''}" data-nav="${id}">${ICONS[id]||''}<span>${esc(n.label)}</span></button>`; }).join('')}
+    </div>`).join('');
+}
+function openMobileNav(){
+  openDrawer('Menu', `<div class="mobile-nav-drawer">${navGroupsHtml()}</div>`, () => {
+    document.querySelectorAll('.mobile-nav-drawer [data-nav]').forEach(b => b.onclick = () => {
+      closeDrawer(); state.view = b.dataset.nav; renderView(); updateNavActive();
+    });
+  });
+}
+function renderShell(){
+  const logoMark = state.entreprise?.logo_url ? `<img src="${esc(state.entreprise.logo_url)}" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:8px">` : 'AE';
   root.innerHTML = `
     <div class="app">
       <nav class="sidebar">
-        <div class="brand"><div class="brand-mark">${state.entreprise?.logo_url ? `<img src="${esc(state.entreprise.logo_url)}" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:8px">` : 'AE'}</div><div class="brand-name">${esc(state.entreprise?.nom || 'Atelier ERP')}</div></div>
+        <div class="brand"><div class="brand-mark">${logoMark}</div><div class="brand-name">${esc(state.entreprise?.nom || 'Atelier ERP')}</div></div>
         <div class="nav-search-hint" id="nav-search-hint"><span>${ICONS.search}&nbsp; Rechercher…</span><kbd>Ctrl K</kbd></div>
-        ${NAV_GROUPS.map(g => `
-          <div class="nav-group">
-            <div class="nav-group-label">${esc(g.label)}</div>
-            ${g.items.map(id => { const n = byId[id]; return `<button class="nav-btn${state.view===id?' active':''}" data-nav="${id}">${ICONS[id]||''}<span>${esc(n.label)}</span></button>`; }).join('')}
-          </div>`).join('')}
+        ${navGroupsHtml()}
         <div class="nav-spacer"></div>
         <div class="nav-foot">
           <div class="nav-ent">${esc(state.entreprise?.nom || '')}</div>
           <button class="logout" id="btn-logout">Se déconnecter</button>
         </div>
       </nav>
+      <div class="mobile-topbar">
+        <div class="brand" style="padding:0"><div class="brand-mark" style="width:26px;height:26px">${logoMark}</div><div class="brand-name" style="font-size:14px">${esc(state.entreprise?.nom || 'Atelier ERP')}</div></div>
+        <div style="display:flex;gap:8px">
+          <button class="mobile-btn" id="mobile-search" type="button">${ICONS.search}</button>
+          <button class="mobile-btn" id="mobile-menu" type="button">${ICONS.menu}</button>
+        </div>
+      </div>
       <main class="main" id="main"></main>
     </div>`;
   root.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { closeDrawer(); state.view = b.dataset.nav; renderView(); updateNavActive(); });
   document.getElementById('nav-search-hint').onclick = () => openCommandPalette();
+  document.getElementById('mobile-search').onclick = () => openCommandPalette();
+  document.getElementById('mobile-menu').onclick = () => openMobileNav();
   document.getElementById('btn-logout').onclick = async () => { await sb.auth.signOut(); };
   renderView();
 }
