@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <style>
 :root{
   --bg:#F5F3EE; --surface:#FFFFFF; --surface-2:#EFEBE2; --border:#E0DACB;
@@ -331,24 +331,112 @@ function printDoc(typeLabel, doc){
   document.getElementById('print-area').innerHTML = buildDocFragment(typeLabel, doc);
   window.print();
 }
-function downloadDoc(typeLabel, doc){
-  const container = document.createElement('div');
-  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:740px;background:#fff';
-  container.innerHTML = buildDocFragment(typeLabel, doc);
-  document.body.appendChild(container);
-  const filename = `${typeLabel}_${doc.numero}`.replace(/[^\w.-]+/g, '_') + '.pdf';
-  toast('Génération du PDF…');
-  html2pdf().from(container).set({
-    filename, margin: 10,
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-  }).save().then(() => {
-    document.body.removeChild(container);
-    toast('PDF téléchargé.');
-  }).catch((e) => {
-    document.body.removeChild(container);
-    toast('Erreur PDF : ' + e.message);
+function buildPdfDoc(typeLabel, doc){
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+  const ent = state.entreprise;
+  const marginL = 15, marginR = 195, pageBottom = 280;
+  const teal = [11,74,70], gray = [100,100,100], black = [20,20,20];
+  let y = 20;
+  const checkPageBreak = (needed) => { if (y + needed > pageBottom){ pdf.addPage(); y = 20; } };
+
+  pdf.setFont('helvetica','bold'); pdf.setFontSize(14); pdf.setTextColor(...black);
+  pdf.text(ent.nom || '', marginL, y);
+  let yLeft = y + 6;
+  pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(...gray);
+  [ent.adresse, ent.forme_juridique, ent.siret ? `SIRET ${ent.siret}` : '', ent.tva_intracom ? `TVA intracommunautaire : ${ent.tva_intracom}` : '']
+    .filter(Boolean).forEach(line => { pdf.text(line, marginL, yLeft); yLeft += 4.5; });
+
+  let yRight = y;
+  pdf.setFont('helvetica','bold'); pdf.setFontSize(13); pdf.setTextColor(...teal);
+  pdf.text(typeLabel, marginR, yRight, { align: 'right' }); yRight += 6;
+  pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(...black);
+  pdf.text(`N° ${doc.numero||''}`, marginR, yRight, { align:'right' }); yRight += 4.5;
+  pdf.text(`Date : ${doc.date||''}`, marginR, yRight, { align:'right' }); yRight += 4.5;
+  if (doc.numeroChantier){ pdf.text(`Chantier : ${doc.numeroChantier}`, marginR, yRight, { align:'right' }); yRight += 4.5; }
+
+  y = Math.max(yLeft, yRight) + 4;
+  pdf.setDrawColor(...teal); pdf.setLineWidth(0.6);
+  pdf.line(marginL, y, marginR, y);
+  y += 8;
+
+  pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.setTextColor(...gray);
+  pdf.text('CLIENT', marginL, y); y += 4.5;
+  pdf.setFont('helvetica','normal'); pdf.setFontSize(11); pdf.setTextColor(...black);
+  pdf.text(doc.clientNom || 'Client ponctuel', marginL, y); y += 9;
+
+  const colX = { desig: marginL, qte: 128, pu: 144, tva: 167 };
+  pdf.setFillColor(240,238,230);
+  pdf.rect(marginL, y-4.5, marginR-marginL, 7, 'F');
+  pdf.setFont('helvetica','bold'); pdf.setFontSize(8); pdf.setTextColor(...gray);
+  pdf.text('DÉSIGNATION', colX.desig+1, y);
+  pdf.text('QTÉ', colX.qte, y);
+  pdf.text('PU HT', colX.pu, y);
+  pdf.text('TVA', colX.tva, y);
+  pdf.text('TOTAL HT', marginR, y, { align:'right' });
+  y += 7;
+
+  pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(...black);
+  (doc.lignes||[]).forEach(l => {
+    const desigLines = pdf.splitTextToSize(l.designation||'', 108);
+    checkPageBreak(Math.max(6, desigLines.length*4.5) + 3);
+    pdf.text(desigLines, colX.desig, y);
+    pdf.text(String(num(l.quantite)), colX.qte, y);
+    pdf.text(money(l.pu), colX.pu, y);
+    pdf.text(num(l.tva,1)+'%', colX.tva, y);
+    pdf.text(money(l.total), marginR, y, { align:'right' });
+    y += Math.max(6, desigLines.length*4.5);
+    pdf.setDrawColor(224,224,224); pdf.setLineWidth(0.2);
+    pdf.line(marginL, y-2, marginR, y-2);
   });
+
+  y += 5;
+  checkPageBreak(24);
+  pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(...black);
+  pdf.text('Total HT', marginR-45, y); pdf.text(money(doc.totalHT), marginR, y, {align:'right'}); y += 5;
+  pdf.setTextColor(...gray);
+  pdf.text(`TVA (${num(doc.tauxTva,1)}%)`, marginR-45, y); pdf.text(money(doc.totalTVA), marginR, y, {align:'right'}); y += 5;
+  pdf.setDrawColor(20,20,20); pdf.setLineWidth(0.3); pdf.line(marginR-45, y, marginR, y); y += 5;
+  pdf.setFont('helvetica','bold'); pdf.setFontSize(11); pdf.setTextColor(...black);
+  pdf.text('Total TTC', marginR-45, y); pdf.text(money(doc.totalTTC), marginR, y, {align:'right'});
+  y += 11;
+
+  if (doc.extraLine){
+    const lines = pdf.splitTextToSize(doc.extraLine, marginR-marginL);
+    checkPageBreak(lines.length*4.5 + 4);
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(9); pdf.setTextColor(...black);
+    pdf.text(lines, marginL, y); y += lines.length*4.5 + 4;
+  }
+  if (doc.conditionsPaiement){
+    checkPageBreak(7);
+    pdf.setFontSize(9); pdf.setTextColor(...black);
+    pdf.text(`Conditions de paiement : ${doc.conditionsPaiement}`, marginL, y); y += 7;
+  }
+
+  const footerParts = [];
+  if (ent.assurance_decennale_assureur) footerParts.push(`Assurance décennale : ${ent.assurance_decennale_assureur}${ent.assurance_decennale_attestation ? ' — attestation ' + ent.assurance_decennale_attestation : ''}${ent.assurance_decennale_validite ? (' (valide jusqu\'au ' + ent.assurance_decennale_validite + ')') : ''}.`);
+  if (ent.rc_pro_assureur) footerParts.push(`RC Pro : ${ent.rc_pro_assureur}.`);
+  if (ent.iban) footerParts.push(`IBAN ${ent.iban}${ent.bic ? ' — BIC ' + ent.bic : ''}.`);
+  if (ent.pied_page_legal) footerParts.push(ent.pied_page_legal);
+  if (footerParts.length){
+    const footerText = footerParts.join(' ');
+    const lines = pdf.splitTextToSize(footerText, marginR-marginL);
+    checkPageBreak(lines.length*3.8 + 6);
+    pdf.setDrawColor(221,221,221); pdf.setLineWidth(0.2); pdf.line(marginL, y, marginR, y); y += 5;
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(7); pdf.setTextColor(...gray);
+    pdf.text(lines, marginL, y);
+  }
+  return pdf;
+}
+function downloadDoc(typeLabel, doc){
+  try {
+    const pdf = buildPdfDoc(typeLabel, doc);
+    const filename = `${typeLabel}_${doc.numero}`.replace(/[^\w.-]+/g, '_') + '.pdf';
+    pdf.save(filename);
+    toast('PDF téléchargé.');
+  } catch (e) {
+    toast('Erreur PDF : ' + e.message);
+  }
 }
 async function getClientEmail(clientId){
   if (!clientId) return null;
