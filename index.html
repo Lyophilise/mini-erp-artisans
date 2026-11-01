@@ -185,6 +185,29 @@ tbody tr:hover{background:var(--surface-2)}
 .chart-bar-label{font-size:10.5px;color:var(--fg-muted);text-transform:capitalize}
 .chart-bar-value{font-size:10.5px;color:var(--fg-muted);font-family:var(--font-mono)}
 
+/* ---- printable documents ---- */
+#print-area{display:none}
+@media print{
+  body > *:not(#print-area){display:none!important}
+  #print-area{display:block!important}
+}
+.print-doc{font-family:Arial,Helvetica,sans-serif;color:#111;padding:20px;max-width:720px;margin:0 auto}
+.print-head{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #0B4A46;padding-bottom:14px;margin-bottom:20px;font-size:12.5px}
+.print-ent-nom{font-weight:700;font-size:17px;margin-bottom:4px}
+.print-doctype{text-align:right}
+.print-doctype-label{font-weight:700;font-size:16px;color:#0B4A46;margin-bottom:4px}
+.print-client{margin-bottom:18px;font-size:13px}
+.print-client-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#666;margin-bottom:3px}
+.print-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:16px}
+.print-table th{background:#F0EEE6;text-align:left;padding:7px 9px;border-bottom:1px solid #ccc;font-size:11px;text-transform:uppercase}
+.print-table td{padding:7px 9px;border-bottom:1px solid #e4e4e4}
+.print-totals{margin-left:auto;width:260px;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.print-totals>div{display:flex;justify-content:space-between}
+.print-total-ttc{border-top:1px solid #111;padding-top:6px;font-size:15px}
+.print-cond{margin-top:18px;font-size:12px}
+.print-footer{margin-top:10px;font-size:11px;color:#444}
+.print-footer-legal{margin-top:30px;padding-top:10px;border-top:1px solid #ddd;font-size:10px;color:#666}
+
 [hidden]{display:none!important}
 
 @media (max-width: 760px){
@@ -202,6 +225,7 @@ tbody tr:hover{background:var(--surface-2)}
 <div id="root"></div>
 <div id="drawer-host"></div>
 <div id="cmdk-host"></div>
+<div id="print-area"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -257,6 +281,68 @@ function renderDrawer(){
   if (state.drawer.mountFn) state.drawer.mountFn();
 }
 
+// ---------- DOCUMENTS IMPRIMABLES (PDF via impression navigateur) + EMAIL ----------
+function buildDocFragment(typeLabel, doc){
+  const ent = state.entreprise;
+  return `
+    <div class="print-doc">
+      <div class="print-head">
+        <div>
+          <div class="print-ent-nom">${esc(ent.nom||'')}</div>
+          ${ent.adresse ? `<div>${esc(ent.adresse)}</div>` : ''}
+          ${ent.forme_juridique ? `<div>${esc(ent.forme_juridique)}</div>` : ''}
+          ${ent.siret ? `<div>SIRET ${esc(ent.siret)}</div>` : ''}
+          ${ent.tva_intracom ? `<div>TVA intracommunautaire : ${esc(ent.tva_intracom)}</div>` : ''}
+        </div>
+        <div class="print-doctype">
+          <div class="print-doctype-label">${esc(typeLabel)}</div>
+          <div>N° ${esc(doc.numero)}</div>
+          <div>Date : ${esc(doc.date)}</div>
+          ${doc.numeroChantier ? `<div>Chantier : ${esc(doc.numeroChantier)}</div>` : ''}
+        </div>
+      </div>
+      <div class="print-client">
+        <div class="print-client-label">Client</div>
+        <div>${esc(doc.clientNom || 'Client ponctuel')}</div>
+      </div>
+      <table class="print-table">
+        <thead><tr><th>Désignation</th><th>Qté</th><th>PU HT</th><th>TVA</th><th>Total HT</th></tr></thead>
+        <tbody>
+          ${doc.lignes.map(l => `<tr><td>${esc(l.designation)}</td><td>${num(l.quantite)}</td><td>${money(l.pu)}</td><td>${num(l.tva,1)}%</td><td>${money(l.total)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+      <div class="print-totals">
+        <div><span>Total HT</span><strong>${money(doc.totalHT)}</strong></div>
+        <div><span>TVA (${num(doc.tauxTva,1)}%)</span><strong>${money(doc.totalTVA)}</strong></div>
+        <div class="print-total-ttc"><span>Total TTC</span><strong>${money(doc.totalTTC)}</strong></div>
+      </div>
+      ${doc.extraLine ? `<div class="print-footer">${esc(doc.extraLine)}</div>` : ''}
+      ${doc.conditionsPaiement ? `<div class="print-cond">Conditions de paiement : ${esc(doc.conditionsPaiement)}</div>` : ''}
+      <div class="print-footer-legal">
+        ${ent.assurance_decennale_assureur ? `Assurance décennale : ${esc(ent.assurance_decennale_assureur)}${ent.assurance_decennale_attestation ? ' — attestation ' + esc(ent.assurance_decennale_attestation) : ''}${ent.assurance_decennale_validite ? (' (valide jusqu\'au ' + esc(ent.assurance_decennale_validite) + ')') : ''}. ` : ''}
+        ${ent.rc_pro_assureur ? `RC Pro : ${esc(ent.rc_pro_assureur)}. ` : ''}
+        ${ent.iban ? `IBAN ${esc(ent.iban)}${ent.bic ? ' — BIC ' + esc(ent.bic) : ''}. ` : ''}
+        ${ent.pied_page_legal ? esc(ent.pied_page_legal) : ''}
+      </div>
+    </div>`;
+}
+function printDoc(typeLabel, doc){
+  document.getElementById('print-area').innerHTML = buildDocFragment(typeLabel, doc);
+  window.print();
+}
+async function getClientEmail(clientId){
+  if (!clientId) return null;
+  const { data } = await sb.from('clients').select('email').eq('id', clientId).maybeSingle();
+  return data?.email || null;
+}
+async function emailDoc(typeLabel, doc, clientId){
+  const email = await getClientEmail(clientId);
+  const subject = `${typeLabel} ${doc.numero} — ${esc(state.entreprise.nom)}`;
+  const body = `Bonjour,\n\nVeuillez trouver ci-joint notre ${typeLabel.toLowerCase()} n° ${doc.numero} (${money(doc.totalTTC)} TTC).\nPensez à joindre le PDF téléchargé via le bouton "Imprimer / PDF".\n\nCordialement,\n${state.entreprise.nom}`;
+  if (!email){ toast("Aucun email enregistré pour ce client — ouverture d'un brouillon sans destinataire."); }
+  window.location.href = `mailto:${email||''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 // ---------- SEARCH FILTER (client-side) ----------
 function filterRows(items, term, fields){
   if (!term) return items;
@@ -277,6 +363,7 @@ const ICONS = {
   materiel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>',
   clients: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>',
   factures: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>',
+  commandes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>',
   rh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
   soustraitance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="19" r="3"/><path d="M15 6.5L9 17.5"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>',
@@ -284,7 +371,7 @@ const ICONS = {
 };
 const NAV_GROUPS = [
   { label: 'Vue d\'ensemble', items: ['dashboard'] },
-  { label: 'Commercial', items: ['devis','clients','factures'] },
+  { label: 'Commercial', items: ['devis','commandes','clients','factures'] },
   { label: 'Opérations', items: ['planning','bibliotheque','heures','stock','achats','materiel'] },
   { label: 'RH & partenaires', items: ['rh','soustraitance'] },
   { label: 'Réglages', items: ['config'] },
@@ -344,6 +431,7 @@ const state = {
   selectedDevisId: null,
   selectedFactureId: null,
   selectedCommandeId: null,
+  selectedCommandeClientId: null,
   drawer: null,
   devisView: 'kanban',
 };
@@ -476,6 +564,7 @@ const NAV = [
   { id:'planning', label:'Planning' },
   { id:'bibliotheque', label:'Bibliothèque' },
   { id:'devis', label:'Devis' },
+  { id:'commandes', label:'Commandes' },
   { id:'heures', label:'Heures' },
   { id:'stock', label:'Stock' },
   { id:'achats', label:'Achats' },
@@ -518,7 +607,7 @@ function updateNavActive(){
 async function renderView(){
   const main = document.getElementById('main');
   main.innerHTML = `<div class="view-head"><h1>…</h1></div>`;
-  const fn = { dashboard:viewDashboard, config:viewConfig, planning:viewPlanning, bibliotheque:viewBibliotheque, devis:viewDevis, heures:viewHeures, stock:viewStock, achats:viewAchats, materiel:viewMateriel, clients:viewClients, factures:viewFactures, rh:viewRH, soustraitance:viewSousTraitance }[state.view];
+  const fn = { dashboard:viewDashboard, config:viewConfig, planning:viewPlanning, bibliotheque:viewBibliotheque, devis:viewDevis, commandes:viewCommandes, heures:viewHeures, stock:viewStock, achats:viewAchats, materiel:viewMateriel, clients:viewClients, factures:viewFactures, rh:viewRH, soustraitance:viewSousTraitance }[state.view];
   await fn(main);
 }
 
@@ -933,6 +1022,27 @@ async function viewDevis(main, term){
   }
 }
 
+async function creerCommandeDepuisDevis(devis){
+  const { data: existing } = await sb.from('commandes_clients').select('*').eq('devis_id', devis.id).maybeSingle();
+  if (existing) return existing;
+  const { data: lignes } = await sb.from('devis_lignes').select('*').eq('devis_id', devis.id).order('created_at');
+  const totalHT = (lignes||[]).reduce((s,l)=>s+Number(l.total_ligne||0),0);
+  const { data: numero, error: numErr } = await sb.rpc('prochain_numero', { p_entreprise_id: state.entreprise.id, p_type: 'commande_client', p_prefixe: 'CDE' });
+  if (numErr){ toast('Erreur numérotation commande : ' + numErr.message); return null; }
+  const { data: commande, error } = await sb.from('commandes_clients').insert({
+    entreprise_id: state.entreprise.id, numero, devis_id: devis.id, numero_chantier: devis.numero_chantier,
+    client_id: devis.client_id, client_nom: devis.client_nom, taux_tva: devis.taux_tva, montant_ht: totalHT,
+  }).select().single();
+  if (error){ toast('Erreur création commande : ' + error.message); return null; }
+  if (lignes && lignes.length){
+    await sb.from('commandes_clients_lignes').insert(lignes.map(l => ({
+      commande_id: commande.id, designation: l.designation, quantite: 1,
+      prix_unitaire_ht: Number(l.total_ligne||0), taux_tva: Number(devis.taux_tva||0), total_ht: Number(l.total_ligne||0),
+    })));
+  }
+  return commande;
+}
+
 async function renderDevisDetail(devis, taches){
   const detail = document.getElementById('devis-detail');
   const { data: lignes } = await sb.from('devis_lignes').select('*').eq('devis_id', devis.id).order('created_at');
@@ -948,9 +1058,13 @@ async function renderDevisDetail(devis, taches){
     <div class="card">
       <div class="card-row">
         <h3 style="margin:0">${esc(devis.numero||devis.numero_chantier)} — ${esc(devis.client_nom||'client ponctuel')} <span style="color:var(--fg-muted);font-weight:400;font-size:13px">(chantier ${esc(devis.numero_chantier)})</span></h3>
-        <select id="devis-statut" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)">
-          ${statuts.map(s=>`<option value="${s}" ${s===devis.statut?'selected':''}>${statutLabels[s]}</option>`).join('')}
-        </select>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" id="devis-print" type="button">Imprimer / PDF</button>
+          <button class="btn btn-ghost btn-sm" id="devis-email" type="button">Envoyer par email</button>
+          <select id="devis-statut" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)">
+            ${statuts.map(s=>`<option value="${s}" ${s===devis.statut?'selected':''}>${statutLabels[s]}</option>`).join('')}
+          </select>
+        </div>
       </div>
       <div class="form-grid" style="margin-bottom:14px">
         <div class="field"><label>TVA (%)</label><input id="devis-tva" type="number" step="0.5" value="${tauxTva}"></div>
@@ -991,10 +1105,24 @@ async function renderDevisDetail(devis, taches){
       </table></div>
     </div>`;
 
+  const docPourImpression = () => ({
+    numero: devis.numero || devis.numero_chantier, date: devis.date, numeroChantier: devis.numero_chantier,
+    clientNom: devis.client_nom, tauxTva, totalHT, totalTVA, totalTTC,
+    extraLine: acomptePct > 0 ? `Acompte demandé à la commande (${num(acomptePct,0)}%) : ${money(montantAcompte)}` : (devis.validite_jours ? `Devis valable ${devis.validite_jours} jours.` : ''),
+    lignes: (lignes||[]).map(l => ({ designation: l.designation, quantite: l.quantite, pu: Number(l.total_ligne||0)/Number(l.quantite||1), tva: tauxTva, total: l.total_ligne })),
+  });
+  document.getElementById('devis-print').onclick = () => printDoc('Devis', docPourImpression());
+  document.getElementById('devis-email').onclick = () => emailDoc('Devis', docPourImpression(), devis.client_id);
   document.getElementById('devis-statut').onchange = async (e) => {
-    const { error } = await sb.from('devis').update({ statut: e.target.value }).eq('id', devis.id);
+    const nouveauStatut = e.target.value;
+    const { error } = await sb.from('devis').update({ statut: nouveauStatut }).eq('id', devis.id);
     if (error) return toast('Erreur : ' + error.message);
-    toast('Statut mis à jour.');
+    if (nouveauStatut === 'Accepte'){
+      const commande = await creerCommandeDepuisDevis(devis);
+      toast(commande ? `Devis accepté → commande ${commande.numero} créée.` : 'Statut mis à jour.');
+    } else {
+      toast('Statut mis à jour.');
+    }
   };
   document.getElementById('devis-save-cond').onclick = async () => {
     const { error } = await sb.from('devis').update({
@@ -1030,6 +1158,104 @@ async function renderDevisDetail(devis, taches){
     if (error) return toast('Erreur : ' + error.message);
     toast('Ligne retirée.'); renderDevisDetail(devis, taches);
   });
+}
+
+// ---------- COMMANDES CLIENTS (devis accepté -> commande ferme -> facture) ----------
+function commandeClientStatutPill(s){
+  const map = { 'Confirmee':['pill-ok','Confirmée'], 'En cours':['pill-warn','En cours'], 'Terminee':['pill-ok','Terminée'], 'Annulee':['pill-bad','Annulée'] };
+  const [cls,label] = map[s] || ['pill-muted', s];
+  return `<span class="pill ${cls}">${esc(label)}</span>`;
+}
+async function viewCommandes(main, term){
+  const { data: commandes } = await sb.from('v_commandes_clients').select('*').eq('entreprise_id', state.entreprise.id).order('date_confirmation', { ascending:false });
+  const list = commandes || [];
+  const filtered = filterRows(list, term, ['numero','numero_chantier','client_nom']);
+  if (!state.selectedCommandeClientId && list.length) state.selectedCommandeClientId = list[0].id;
+  const selected = list.find(c => c.id === state.selectedCommandeClientId) || null;
+
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Commandes</h1><div class="view-sub">Créée automatiquement quand un devis passe en statut « Accepté » — c'est elle qui sert de base à la facturation.</div></div></div>
+    <div class="list-toolbar">
+      <input class="search-input" id="commandes-clients-search" placeholder="Rechercher une commande…" value="${esc(term||'')}">
+    </div>
+    <div class="two-pane">
+      <div class="pane-list">
+        <h3 style="font-size:13px;margin-bottom:10px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.03em">Commandes</h3>
+        ${filtered.length ? filtered.map(c => `
+          <div class="list-item${c.id===state.selectedCommandeClientId?' active':''}">
+            <button data-select-commande-client="${c.id}">
+              <div><strong>${esc(c.numero)}</strong></div>
+              <div class="meta">${esc(c.client_nom||'—')} · ${esc(c.date_confirmation)} · ${commandeClientStatutPill(c.statut)}</div>
+            </button>
+          </div>`).join('') : `<div class="meta">${list.length?'Aucun résultat.':'Aucune commande — accepte un devis pour en créer une.'}</div>`}
+      </div>
+      <div class="pane-detail" id="commande-client-detail"></div>
+    </div>`;
+  document.getElementById('commandes-clients-search').oninput = (e) => viewCommandes(main, e.target.value);
+  main.querySelectorAll('[data-select-commande-client]').forEach(b => b.onclick = () => { state.selectedCommandeClientId = b.dataset.selectCommandeClient; viewCommandes(main, term); });
+  if (selected) await renderCommandeClientDetail(main, selected);
+}
+async function renderCommandeClientDetail(main, commande){
+  const detail = document.getElementById('commande-client-detail');
+  const { data: lignes } = await sb.from('commandes_clients_lignes').select('*').eq('commande_id', commande.id).order('created_at');
+  const totalHT = (lignes||[]).reduce((s,l)=>s+Number(l.total_ht||0),0);
+  const totalTVA = totalHT * Number(commande.taux_tva||0) / 100;
+  const totalTTC = totalHT + totalTVA;
+  const dejaFacture = Number(commande.deja_facture_ht||0);
+  const resteAFacturer = totalHT - dejaFacture;
+  const statuts = ['Confirmee','En cours','Terminee','Annulee'];
+  const statutLabels = {'Confirmee':'Confirmée','En cours':'En cours','Terminee':'Terminée','Annulee':'Annulée'};
+  detail.innerHTML = `
+    <div class="card">
+      <div class="card-row">
+        <h3 style="margin:0">${esc(commande.numero)} — ${esc(commande.client_nom||'client ponctuel')}</h3>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" id="commande-client-print" type="button">Imprimer / PDF</button>
+          <button class="btn btn-ghost btn-sm" id="commande-client-email" type="button">Envoyer par email</button>
+          <select id="commande-client-statut" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)">
+            ${statuts.map(s=>`<option value="${s}" ${s===commande.statut?'selected':''}>${statutLabels[s]}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="view-sub">Chantier ${esc(commande.numero_chantier||'—')} · Confirmée le ${esc(commande.date_confirmation)} · Déjà facturé : ${money(dejaFacture)} HT (${commande.nb_factures||0} facture${commande.nb_factures>1?'s':''})</div>
+      <div class="table-wrap" style="margin-top:14px"><table>
+        <thead><tr><th>Désignation</th><th class="num">Qté</th><th class="num">PU HT</th><th class="num">Total HT</th></tr></thead>
+        <tbody>
+          ${(lignes&&lignes.length) ? lignes.map(l => `<tr><td>${esc(l.designation)}</td><td class="num">${num(l.quantite)}</td><td class="num">${money(l.prix_unitaire_ht)}</td><td class="num"><strong>${money(l.total_ht)}</strong></td></tr>`).join('') : emptyRow(4,'Aucune ligne.')}
+        </tbody>
+        <tfoot>
+          <tr><td colspan="3" style="text-align:right;font-weight:600">Total HT</td><td class="num" style="font-weight:700">${money(totalHT)}</td></tr>
+          <tr><td colspan="3" style="text-align:right;color:var(--fg-muted)">TVA (${num(commande.taux_tva,1)}%)</td><td class="num">${money(totalTVA)}</td></tr>
+          <tr><td colspan="3" style="text-align:right;font-weight:700">Total TTC</td><td class="num" style="font-weight:700">${money(totalTTC)}</td></tr>
+          <tr><td colspan="3" style="text-align:right;color:var(--accent)">Reste à facturer HT</td><td class="num" style="color:var(--accent)">${money(resteAFacturer)}</td></tr>
+        </tfoot>
+      </table></div>
+      <div style="margin-top:14px"><button class="btn btn-primary" id="commande-client-facturer" type="button">Facturer cette commande</button></div>
+    </div>`;
+  document.getElementById('commande-client-statut').onchange = async (e) => {
+    const { error } = await sb.from('commandes_clients').update({ statut: e.target.value }).eq('id', commande.id);
+    if (error) return toast('Erreur : ' + error.message);
+    toast('Statut mis à jour.');
+  };
+  const docPourImpression = () => ({
+    numero: commande.numero, date: commande.date_confirmation, numeroChantier: commande.numero_chantier,
+    clientNom: commande.client_nom, tauxTva: commande.taux_tva, totalHT, totalTVA, totalTTC,
+    extraLine: `Déjà facturé : ${money(dejaFacture)} HT — reste à facturer : ${money(resteAFacturer)} HT.`,
+    lignes: (lignes||[]).map(l => ({ designation: l.designation, quantite: l.quantite, pu: l.prix_unitaire_ht, tva: l.taux_tva, total: l.total_ht })),
+  });
+  document.getElementById('commande-client-print').onclick = () => printDoc('Bon de commande', docPourImpression());
+  document.getElementById('commande-client-email').onclick = () => emailDoc('Bon de commande', docPourImpression(), commande.client_id);
+  document.getElementById('commande-client-facturer').onclick = async () => {
+    state.view = 'factures';
+    updateNavActive();
+    const mainEl = document.getElementById('main');
+    await viewFactures(mainEl);
+    const [{ data: commandesList }, { data: clients }] = await Promise.all([
+      sb.from('v_commandes_clients').select('*').eq('entreprise_id', state.entreprise.id),
+      sb.from('clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
+    ]);
+    drawerFacture(mainEl, commandesList||[], clients||[], commande.id);
+  };
 }
 
 // ---------- HEURES ----------
@@ -1211,20 +1437,20 @@ async function viewClients(main, term){
 }
 
 // ---------- FACTURES ----------
-function drawerFacture(main, devisList, clients){
+function drawerFacture(main, commandesList, clients, preselectId){
   openDrawer('Nouvelle facture', `
     <form id="form-facture">
       <div class="form-grid">
-        <div class="field"><label>Depuis un devis (optionnel)</label>
-          <select name="devis_id" id="facture-devis-select">
+        <div class="field"><label>Depuis une commande (optionnel)</label>
+          <select name="commande_id" id="facture-commande-select">
             <option value="">— Facture manuelle —</option>
-            ${(devisList||[]).map(d => `<option value="${d.id}">${esc(d.numero||d.numero_chantier)} — ${esc(d.client_nom||'—')}</option>`).join('')}
+            ${(commandesList||[]).map(c => `<option value="${c.id}" ${c.id===preselectId?'selected':''}>${esc(c.numero)} — ${esc(c.client_nom||'—')}</option>`).join('')}
           </select>
         </div>
         <div class="field"><label>Type</label>
           <select name="type"><option>Facture unique</option><option>Acompte</option><option>Solde</option></select>
         </div>
-        <div class="field" id="facture-pct-field" hidden><label>% du devis (acompte)</label><input name="pct_acompte" type="number" step="5" value="30"></div>
+        <div class="field" id="facture-pct-field" hidden><label>% de la commande (acompte)</label><input name="pct_acompte" type="number" step="5" value="30"></div>
         <div class="field"><label>Client (si manuelle)</label>
           <select name="client_id"><option value="">— Client ponctuel —</option>${(clients||[]).map(c=>`<option value="${c.id}">${esc(c.nom)}</option>`).join('')}</select>
         </div>
@@ -1242,9 +1468,9 @@ function drawerFacture(main, devisList, clients){
   document.getElementById('form-facture').onsubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const devisId = fd.get('devis_id') || null;
+    const commandeId = fd.get('commande_id') || null;
     const type = fd.get('type');
-    const devis = devisId ? (devisList||[]).find(d => d.id === devisId) : null;
+    const commande = commandeId ? (commandesList||[]).find(c => c.id === commandeId) : null;
 
     let clientId = fd.get('client_id') || null;
     let clientNom = clientId ? (clients||[]).find(c=>c.id===clientId)?.nom : null;
@@ -1252,20 +1478,20 @@ function drawerFacture(main, devisList, clients){
     let tauxTva = Number(state.entreprise.taux_tva||0);
     let factureLignes = [];
 
-    if (devis){
-      clientId = devis.client_id; clientNom = devis.client_nom; numeroChantier = devis.numero_chantier;
-      tauxTva = Number(devis.taux_tva||tauxTva);
-      const { data: devisLignes } = await sb.from('devis_lignes').select('*').eq('devis_id', devis.id);
-      const totalHtDevis = (devisLignes||[]).reduce((s,l)=>s+Number(l.total_ligne||0),0);
+    if (commande){
+      clientId = commande.client_id; clientNom = commande.client_nom; numeroChantier = commande.numero_chantier;
+      tauxTva = Number(commande.taux_tva||tauxTva);
+      const { data: commandeLignes } = await sb.from('commandes_clients_lignes').select('*').eq('commande_id', commande.id);
+      const totalHtCommande = (commandeLignes||[]).reduce((s,l)=>s+Number(l.total_ht||0),0);
       if (type === 'Facture unique'){
-        factureLignes = (devisLignes||[]).map(l => ({ designation: l.designation, quantite: 1, prix_unitaire_ht: Number(l.total_ligne||0), taux_tva: tauxTva }));
+        factureLignes = (commandeLignes||[]).map(l => ({ designation: l.designation, quantite: l.quantite, prix_unitaire_ht: l.prix_unitaire_ht, taux_tva: tauxTva }));
       } else if (type === 'Acompte'){
         const pct = Number(fd.get('pct_acompte')||0);
-        factureLignes = [{ designation: `Acompte sur devis ${devis.numero||devis.numero_chantier} (${pct}%)`, quantite: 1, prix_unitaire_ht: totalHtDevis * pct / 100, taux_tva: tauxTva }];
+        factureLignes = [{ designation: `Acompte sur commande ${commande.numero} (${pct}%)`, quantite: 1, prix_unitaire_ht: totalHtCommande * pct / 100, taux_tva: tauxTva }];
       } else if (type === 'Solde'){
-        const { data: dejaFacture } = await sb.from('factures').select('montant_ht').eq('devis_id', devis.id).neq('type', 'Avoir');
+        const { data: dejaFacture } = await sb.from('factures').select('montant_ht').eq('commande_id', commande.id).neq('type', 'Avoir');
         const dejaHT = (dejaFacture||[]).reduce((s,f)=>s+Number(f.montant_ht||0),0);
-        factureLignes = [{ designation: `Solde sur devis ${devis.numero||devis.numero_chantier}`, quantite: 1, prix_unitaire_ht: totalHtDevis - dejaHT, taux_tva: tauxTva }];
+        factureLignes = [{ designation: `Solde sur commande ${commande.numero}`, quantite: 1, prix_unitaire_ht: totalHtCommande - dejaHT, taux_tva: tauxTva }];
       }
     }
 
@@ -1277,7 +1503,7 @@ function drawerFacture(main, devisList, clients){
 
     const { data: facture, error } = await sb.from('factures').insert({
       entreprise_id: state.entreprise.id, numero_facture: numero, numero_chantier: numeroChantier,
-      client_id: clientId, client_nom: clientNom, type, devis_id: devis?.id||null,
+      client_id: clientId, client_nom: clientNom, type, devis_id: commande?.devis_id||null, commande_id: commande?.id||null,
       date_emission: fd.get('date_emission')||todayISO(), date_echeance: fd.get('date_echeance')||null,
       montant_ht: totalHT, tva: totalTVA, montant_ttc: totalHT+totalTVA,
       conditions_paiement: state.entreprise.conditions_paiement||null,
@@ -1297,10 +1523,10 @@ function drawerFacture(main, devisList, clients){
 }
 
 async function viewFactures(main, term){
-  const [{ data: factures }, { data: clients }, { data: devisList }] = await Promise.all([
+  const [{ data: factures }, { data: clients }, { data: commandesList }] = await Promise.all([
     sb.from('v_factures').select('*').eq('entreprise_id', state.entreprise.id).order('date_emission', { ascending:false }),
     sb.from('clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
-    sb.from('devis').select('*').eq('entreprise_id', state.entreprise.id).order('date', { ascending:false }),
+    sb.from('v_commandes_clients').select('*').eq('entreprise_id', state.entreprise.id).order('date_confirmation', { ascending:false }),
   ]);
   const list = factures || [];
   const filtered = filterRows(list, term, ['numero_facture','client_nom','numero_chantier']);
@@ -1327,7 +1553,7 @@ async function viewFactures(main, term){
       <div class="pane-detail" id="facture-detail"></div>
     </div>`;
 
-  document.getElementById('factures-new').onclick = () => drawerFacture(main, devisList||[], clients||[]);
+  document.getElementById('factures-new').onclick = () => drawerFacture(main, commandesList||[], clients||[]);
   document.getElementById('factures-search').oninput = (e) => viewFactures(main, e.target.value);
   main.querySelectorAll('[data-select-facture]').forEach(b => b.onclick = () => { state.selectedFactureId = b.dataset.selectFacture; viewFactures(main, term); });
 
@@ -1345,6 +1571,8 @@ async function renderFactureDetail(facture){
       <div class="card-row">
         <h3 style="margin:0">${esc(facture.numero_facture)} — ${esc(facture.client_nom||'client ponctuel')}</h3>
         <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" id="facture-print" type="button">Imprimer / PDF</button>
+          <button class="btn btn-ghost btn-sm" id="facture-email" type="button">Envoyer par email</button>
           ${facture.statut!=='Payee' && facture.type!=='Avoir' ? `<button class="btn btn-ghost btn-sm" id="btn-pay-facture">Marquer payée</button>` : ''}
           ${facture.type!=='Avoir' ? `<button class="btn btn-ghost btn-sm" id="btn-avoir-facture">Générer un avoir</button>` : ''}
         </div>
@@ -1381,6 +1609,17 @@ async function renderFactureDetail(facture){
     const tva = (l2||[]).reduce((s,l)=>s+Number(l.total_ht||0)*Number(l.taux_tva||0)/100,0);
     await sb.from('factures').update({ montant_ht: ht, tva, montant_ttc: ht+tva }).eq('id', facture.id);
   };
+
+  document.getElementById('facture-print').onclick = () => printDoc(facture.type==='Avoir'?'Avoir':'Facture', {
+    numero: facture.numero_facture, date: facture.date_emission, numeroChantier: facture.numero_chantier,
+    clientNom: facture.client_nom, tauxTva: facture.montant_ht ? (facture.tva/facture.montant_ht*100) : (state.entreprise.taux_tva||0),
+    totalHT: facture.montant_ht, totalTVA: facture.tva, totalTTC: facture.montant_ttc,
+    conditionsPaiement: base?.conditions_paiement, extraLine: facture.date_echeance ? `Échéance : ${facture.date_echeance}` : '',
+    lignes: (lignes||[]).map(l => ({ designation: l.designation, quantite: l.quantite, pu: l.prix_unitaire_ht, tva: l.taux_tva, total: l.total_ht })),
+  });
+  document.getElementById('facture-email').onclick = () => emailDoc(facture.type==='Avoir'?'Avoir':'Facture', {
+    numero: facture.numero_facture, totalTTC: facture.montant_ttc,
+  }, base?.client_id);
 
   document.getElementById('form-facture-ligne').onsubmit = async (e) => {
     e.preventDefault();
