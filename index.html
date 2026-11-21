@@ -629,7 +629,7 @@ const ICONS = {
 };
 const NAV_GROUPS = [
   { label: 'Vue d\'ensemble', items: ['dashboard'] },
-  { label: 'Commercial', items: ['devis','commandes','clients','factures'] },
+  { label: 'Commercial', items: ['devis','commandes','clients','factures','relances'] },
   { label: 'Opérations', items: ['planning','bibliotheque','heures','stock','achats','materiel'] },
   { label: 'RH & partenaires', items: ['rh','soustraitance'] },
   { label: 'Compta', items: ['compta'] },
@@ -1001,6 +1001,7 @@ const NAV = [
   { id:'materiel', label:'Matériel' },
   { id:'clients', label:'Clients' },
   { id:'factures', label:'Factures' },
+  { id:'relances', label:'Relances' },
   { id:'rh', label:'RH' },
   { id:'soustraitance', label:'Sous-traitance' },
   { id:'compta', label:'Compta' },
@@ -1064,21 +1065,27 @@ async function renderView(){
   if (state.profil?.role !== 'admin' && !SALARIE_VIEWS.has(state.view)) state.view = 'dashboard';
   const main = document.getElementById('main');
   main.innerHTML = `<div class="view-head"><h1>…</h1></div>`;
-  const fn = { dashboard:viewDashboard, config:viewConfig, planning:viewPlanning, bibliotheque:viewBibliotheque, devis:viewDevis, commandes:viewCommandes, heures:viewHeures, stock:viewStock, achats:viewAchats, materiel:viewMateriel, clients:viewClients, factures:viewFactures, rh:viewRH, soustraitance:viewSousTraitance, compta:viewCompta }[state.view];
+  const fn = { dashboard:viewDashboard, config:viewConfig, planning:viewPlanning, bibliotheque:viewBibliotheque, devis:viewDevis, commandes:viewCommandes, heures:viewHeures, stock:viewStock, achats:viewAchats, materiel:viewMateriel, clients:viewClients, factures:viewFactures, rh:viewRH, soustraitance:viewSousTraitance, compta:viewCompta, relances:viewRelances }[state.view];
   await fn(main);
 }
 
 // ---------- DASHBOARD ----------
 async function viewDashboard(main){
   if (state.profil?.role !== 'admin'){ viewDashboardSalarie(main); return; }
-  const [{ data: d }, { data: rent }, { data: alertesMateriel }, { data: alertesHabilitations }, { data: facturesChart }] = await Promise.all([
+  const [{ data: d }, { data: rent }, { data: alertesMateriel }, { data: alertesHabilitations }, { data: facturesChart }, { data: devisEnvoyes }, { data: facturesEnRetardCount }, { data: relancesLibres }] = await Promise.all([
     sb.from('v_dashboard').select('*').eq('entreprise_id', state.entreprise.id).maybeSingle(),
     sb.from('v_rentabilite').select('*').eq('entreprise_id', state.entreprise.id).order('numero_chantier'),
     sb.from('v_alertes_materiel').select('*').eq('entreprise_id', state.entreprise.id),
     sb.from('v_alertes_habilitations').select('*').eq('entreprise_id', state.entreprise.id),
     sb.from('v_factures').select('date_emission,montant_ttc').eq('entreprise_id', state.entreprise.id),
+    sb.from('devis').select('date').eq('entreprise_id', state.entreprise.id).eq('statut', 'Devis envoye'),
+    sb.from('v_factures').select('id').eq('entreprise_id', state.entreprise.id).eq('statut', 'En retard'),
+    sb.from('relances').select('id').eq('entreprise_id', state.entreprise.id).eq('statut', 'a_faire'),
   ]);
   const row = d || {};
+  const seuilJours = Number(state.entreprise.relance_devis_jours || 7);
+  const nbDevisSansReponse = (devisEnvoyes||[]).filter(dv => Math.round((new Date(todayISO()) - new Date(dv.date)) / 86400000) > seuilJours).length;
+  const nbRelances = nbDevisSansReponse + (facturesEnRetardCount||[]).length + (relancesLibres||[]).length;
   const moisLabels = [];
   const moisTotaux = {};
   for (let i = 5; i >= 0; i--){
@@ -1117,7 +1124,14 @@ async function viewDashboard(main){
       ${kpi('Commandes en attente', row.commandes_en_attente||0, '', (row.commandes_en_attente||0)>0?'warn':'good')}
       ${kpi('Sous-traitance à payer', money(row.sous_traitance_a_payer), '', (row.sous_traitance_a_payer||0)>0?'warn':'good')}
       ${kpi('Factures fournisseurs à payer', money(row.factures_achats_a_payer), '', (row.factures_achats_a_payer||0)>0?'warn':'good')}
+      ${kpi('Relances à faire', nbRelances, '', nbRelances>0?'warn':'good')}
     </div>
+    ${nbRelances > 0 ? `
+    <div class="card">
+      <h3>Relances à faire (${nbRelances})</h3>
+      <p class="view-sub" style="margin-bottom:10px">${nbDevisSansReponse} devis sans réponse depuis plus de ${seuilJours} j · ${(facturesEnRetardCount||[]).length} facture(s) en retard · ${(relancesLibres||[]).length} tâche(s) de suivi.</p>
+      <button class="btn btn-ghost btn-sm" data-nav="relances">Voir les relances</button>
+    </div>` : ''}
     <div class="card">
       <h3>CA facturé TTC — 6 derniers mois</h3>
       <div class="chart-wrap">
@@ -1156,6 +1170,7 @@ async function viewDashboard(main){
         </tbody>
       </table></div>
     </div>`;
+  main.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { state.view = b.dataset.nav; renderShell(); });
 }
 function viewDashboardSalarie(main){
   main.innerHTML = `
@@ -1196,6 +1211,7 @@ async function viewConfig(main){
         <div class="field"><label>Métier / secteur</label><input name="secteur" value="${esc(ent.secteur||'')}"></div>
         <div class="field"><label>Taux horaire de vente par défaut (€)</label><input name="taux_horaire_defaut" type="number" step="0.5" value="${ent.taux_horaire_defaut}"></div>
         <div class="field"><label>Taux de TVA par défaut (%)</label><input name="taux_tva" type="number" step="0.5" value="${ent.taux_tva}"></div>
+        <div class="field"><label>Relancer un devis sans réponse après (jours)</label><input name="relance_devis_jours" type="number" step="1" value="${ent.relance_devis_jours ?? 7}"></div>
         <div class="field"><button class="btn btn-primary" type="submit">Enregistrer</button></div>
       </form>
     </div>
@@ -1301,7 +1317,8 @@ async function viewConfig(main){
     const fd = new FormData(e.target);
     const { error } = await sb.from('entreprises').update({
       nom: fd.get('nom'), secteur: fd.get('secteur'),
-      taux_horaire_defaut: Number(fd.get('taux_horaire_defaut')), taux_tva: Number(fd.get('taux_tva'))
+      taux_horaire_defaut: Number(fd.get('taux_horaire_defaut')), taux_tva: Number(fd.get('taux_tva')),
+      relance_devis_jours: Number(fd.get('relance_devis_jours')||7),
     }).eq('id', ent.id);
     if (error) return toast('Erreur : ' + error.message);
     await loadProfil(); toast('Entreprise mise à jour.'); renderShell();
@@ -1490,6 +1507,10 @@ function drawerDevis(main, list, clients){
         taux_tva: Number(fd.get('taux_tva')||20), validite_jours: Number(fd.get('validite_jours')||30),
       }).select().single();
       if (error) return toast('Erreur : ' + error.message);
+      if (clientId){
+        // le pipeline avance au moins jusqu'à "Devis envoyé" dès qu'un devis part chez un prospect/qualifié
+        await sb.from('clients').update({ statut_pipeline: 'Devis envoye' }).eq('id', clientId).in('statut_pipeline', ['Prospect','Qualifie']);
+      }
       state.selectedDevisId = data.id; state.devisView = 'list';
       closeDrawer(); toast('Devis créé.'); viewDevis(main);
     };
@@ -1614,6 +1635,9 @@ async function creerCommandeDepuisDevis(devis){
         }
       }
     }
+  }
+  if (devis.client_id){
+    await sb.from('clients').update({ statut_pipeline: 'Client' }).eq('id', devis.client_id);
   }
   return commande;
 }
@@ -2016,8 +2040,12 @@ async function viewStock(main, term){
 }
 
 // ---------- CLIENTS ----------
+const CLIENT_STATUTS = ['Prospect','Qualifie','Devis envoye','Client','Perdu'];
+const CLIENT_STATUT_LABELS = {'Prospect':'Prospect','Qualifie':'Qualifié','Devis envoye':'Devis envoyé','Client':'Client','Perdu':'Perdu'};
+const CLIENT_SOURCES = ['Bouche-à-oreille','Site web','Recommandation','Salon','Autre'];
+
 function drawerClient(main){
-  openDrawer('Nouveau client', `
+  openDrawer('Nouveau prospect / client', `
     <form id="form-client">
       <div class="form-grid">
         <div class="field"><label>Nom</label><input name="nom" required></div>
@@ -2025,6 +2053,9 @@ function drawerClient(main){
         <div class="field"><label>Téléphone</label><input name="telephone"></div>
         <div class="field"><label>Email</label><input name="email" type="email"></div>
         <div class="field"><label>Adresse</label><input name="adresse"></div>
+        <div class="field"><label>Source</label>
+          <select name="source"><option value="">—</option>${CLIENT_SOURCES.map(s=>`<option>${s}</option>`).join('')}</select>
+        </div>
       </div>
       <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="client-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
     </form>`, () => {
@@ -2035,35 +2066,225 @@ function drawerClient(main){
       const { error } = await sb.from('clients').insert({
         entreprise_id: state.entreprise.id, nom: fd.get('nom'), contact: fd.get('contact'),
         telephone: fd.get('telephone'), email: fd.get('email'), adresse: fd.get('adresse'),
+        source: fd.get('source') || null,
       });
       if (error) return toast('Erreur : ' + error.message);
-      closeDrawer(); toast('Client ajouté.'); viewClients(main);
+      closeDrawer(); toast('Prospect ajouté.'); viewClients(main);
     };
   });
 }
+
+function drawerRelanceClient(main, client){
+  openDrawer(`Tâche de suivi — ${esc(client.nom)}`, `
+    <form id="form-relance-client">
+      <div class="form-grid">
+        <div class="field" style="flex:2 1 260px"><label>Tâche</label><input name="titre" required placeholder="Rappeler, relancer le devis..."></div>
+        <div class="field"><label>Échéance</label><input name="echeance" type="date"></div>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="relance-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>`, () => {
+    document.getElementById('relance-cancel').onclick = closeDrawer;
+    document.getElementById('form-relance-client').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const { error } = await sb.from('relances').insert({
+        entreprise_id: state.entreprise.id, client_id: client.id,
+        titre: fd.get('titre'), echeance: fd.get('echeance') || null,
+      });
+      if (error) return toast('Erreur : ' + error.message);
+      closeDrawer(); toast('Tâche de suivi ajoutée.'); viewClients(main);
+    };
+  });
+}
+
 async function viewClients(main, term){
-  const { data: clients } = await sb.from('v_clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom');
+  const [{ data: clients }, { data: relances }] = await Promise.all([
+    sb.from('v_clients').select('*').eq('entreprise_id', state.entreprise.id).order('nom'),
+    sb.from('relances').select('*').eq('entreprise_id', state.entreprise.id).eq('statut', 'a_faire'),
+  ]);
   const filtered = filterRows(clients||[], term, ['nom','contact','telephone','email']);
+  const relancesFor = cid => (relances||[]).filter(r => r.client_id === cid);
+  if (!state.clientsView) state.clientsView = 'kanban';
+
   main.innerHTML = `
-    <div class="view-head"><div><h1>Clients</h1><div class="view-sub">CA total et nombre de devis calculés automatiquement.</div></div></div>
+    <div class="view-head">
+      <div><h1>Clients</h1><div class="view-sub">Pipeline commercial du premier contact au client — CA et devis calculés automatiquement.</div></div>
+      <div class="view-actions">
+        <div class="segmented"><button data-clientsview="kanban" class="${state.clientsView==='kanban'?'active':''}">Kanban</button><button data-clientsview="list" class="${state.clientsView==='list'?'active':''}">Liste</button></div>
+      </div>
+    </div>
     <div class="list-toolbar">
       <input class="search-input" id="clients-search" placeholder="Rechercher un client…" value="${esc(term||'')}">
-      <button class="btn btn-primary btn-new" id="clients-new">${ICONS.plus} Nouveau client</button>
+      <button class="btn btn-primary btn-new" id="clients-new">${ICONS.plus} Nouveau prospect</button>
     </div>
-    <div class="card">
+    <div id="clients-body"></div>`;
+
+  document.getElementById('clients-new').onclick = () => drawerClient(main);
+  document.getElementById('clients-search').oninput = (e) => viewClients(main, e.target.value);
+  main.querySelectorAll('[data-clientsview]').forEach(b => b.onclick = () => { state.clientsView = b.dataset.clientsview; viewClients(main, term); });
+
+  const body = document.getElementById('clients-body');
+  if (state.clientsView === 'kanban'){
+    body.innerHTML = `<div class="kanban">
+      ${CLIENT_STATUTS.map(s => {
+        const cards = filtered.filter(c => (c.statut_pipeline||'Prospect') === s);
+        return `<div class="kanban-col" data-col="${s}">
+          <div class="kanban-col-head"><span>${CLIENT_STATUT_LABELS[s]}</span><span>${cards.length}</span></div>
+          ${cards.length ? cards.map(c => `
+            <div class="kanban-card" draggable="true" data-card="${c.id}">
+              <div class="kc-title">${esc(c.nom)}</div>
+              <div class="kc-meta">${esc(c.contact||c.email||'—')}${c.source ? ' · '+esc(c.source) : ''}</div>
+              ${c.ca_total ? `<div class="kc-amount">${money(c.ca_total)}</div>` : ''}
+              ${relancesFor(c.id).length ? `<div class="view-sub">⚑ ${relancesFor(c.id).length} tâche(s) de suivi</div>` : ''}
+            </div>`).join('') : `<div class="kanban-empty">Vide</div>`}
+        </div>`;
+      }).join('')}
+    </div>`;
+    body.querySelectorAll('[data-card]').forEach(card => {
+      card.ondragstart = (e) => { e.dataTransfer.setData('text/plain', card.dataset.card); };
+    });
+    body.querySelectorAll('[data-col]').forEach(col => {
+      col.ondragover = (e) => { e.preventDefault(); col.classList.add('dragover'); };
+      col.ondragleave = () => col.classList.remove('dragover');
+      col.ondrop = async (e) => {
+        e.preventDefault(); col.classList.remove('dragover');
+        const id = e.dataTransfer.getData('text/plain');
+        const { error } = await sb.from('clients').update({ statut_pipeline: col.dataset.col }).eq('id', id);
+        if (error) return toast('Erreur : ' + error.message);
+        toast('Étape mise à jour.'); viewClients(main, term);
+      };
+    });
+  } else {
+    body.innerHTML = `<div class="card">
       <div class="table-wrap"><table>
-        <thead><tr><th>Nom</th><th>Contact</th><th>Téléphone</th><th class="num">CA total</th><th class="num">Nb devis</th><th>Dernier devis</th></tr></thead>
+        <thead><tr><th>Nom</th><th>Contact</th><th>Téléphone</th><th>Étape</th><th class="num">CA total</th><th class="num">Nb devis</th><th>Suivi</th></tr></thead>
         <tbody>
           ${filtered.length ? filtered.map(c => `
             <tr>
-              <td>${esc(c.nom)}</td><td>${esc(c.contact||'—')}</td><td>${esc(c.telephone||'—')}</td>
-              <td class="num">${money(c.ca_total)}</td><td class="num">${c.nb_devis||0}</td><td>${esc(c.dernier_devis||'—')}</td>
-            </tr>`).join('') : emptyRow(6, (clients&&clients.length) ? 'Aucun résultat.' : 'Aucun client enregistré.')}
+              <td>${esc(c.nom)}${c.source ? `<div class="view-sub">${esc(c.source)}</div>` : ''}</td>
+              <td>${esc(c.contact||'—')}</td><td>${esc(c.telephone||'—')}</td>
+              <td><select class="client-statut-select" data-id="${c.id}">${CLIENT_STATUTS.map(s=>`<option value="${s}" ${s===(c.statut_pipeline||'Prospect')?'selected':''}>${CLIENT_STATUT_LABELS[s]}</option>`).join('')}</select></td>
+              <td class="num">${money(c.ca_total)}</td><td class="num">${c.nb_devis||0}</td>
+              <td>
+                ${relancesFor(c.id).map(r => `<div class="view-sub">• ${esc(r.titre)}${r.echeance ? ' ('+esc(r.echeance)+')' : ''}</div>`).join('')}
+                <button class="btn btn-ghost btn-sm add-relance-client-btn" data-id="${c.id}">+ Tâche de suivi</button>
+              </td>
+            </tr>`).join('') : emptyRow(7, (clients&&clients.length) ? 'Aucun résultat.' : 'Aucun client enregistré.')}
         </tbody>
       </table></div>
     </div>`;
-  document.getElementById('clients-new').onclick = () => drawerClient(main);
-  document.getElementById('clients-search').oninput = (e) => viewClients(main, e.target.value);
+    body.querySelectorAll('.client-statut-select').forEach(sel => {
+      sel.onchange = async () => {
+        const { error } = await sb.from('clients').update({ statut_pipeline: sel.value }).eq('id', sel.dataset.id);
+        if (error) return toast('Erreur : ' + error.message);
+        toast('Étape mise à jour.'); viewClients(main, term);
+      };
+    });
+    body.querySelectorAll('.add-relance-client-btn').forEach(btn => {
+      btn.onclick = () => drawerRelanceClient(main, (clients||[]).find(c=>c.id===btn.dataset.id));
+    });
+  }
+}
+
+// ---------- RELANCES ----------
+function drawerRelanceLibre(main, clients){
+  openDrawer('Nouvelle tâche de suivi', `
+    <form id="form-relance-libre">
+      <div class="form-grid">
+        <div class="field" style="flex:2 1 260px"><label>Tâche</label><input name="titre" required placeholder="Rappeler, relancer le devis..."></div>
+        <div class="field"><label>Client (optionnel)</label>
+          <select name="client_id"><option value="">—</option>${(clients||[]).map(c=>`<option value="${c.id}">${esc(c.nom)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Échéance</label><input name="echeance" type="date"></div>
+      </div>
+      <div class="drawer-foot" style="margin:18px -20px -18px"><button class="btn btn-ghost" type="button" id="relance-libre-cancel">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>`, () => {
+    document.getElementById('relance-libre-cancel').onclick = closeDrawer;
+    document.getElementById('form-relance-libre').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const { error } = await sb.from('relances').insert({
+        entreprise_id: state.entreprise.id, client_id: fd.get('client_id') || null,
+        titre: fd.get('titre'), echeance: fd.get('echeance') || null,
+      });
+      if (error) return toast('Erreur : ' + error.message);
+      closeDrawer(); toast('Tâche de suivi ajoutée.'); viewRelances(main);
+    };
+  });
+}
+
+async function viewRelances(main){
+  const seuilJours = Number(state.entreprise.relance_devis_jours || 7);
+  const [{ data: devisList }, { data: facturesEnRetard }, { data: relances }, { data: clients }] = await Promise.all([
+    sb.from('devis').select('id,numero,numero_chantier,client_nom,date').eq('entreprise_id', state.entreprise.id).eq('statut', 'Devis envoye'),
+    sb.from('v_factures').select('id,numero_facture,client_nom,montant_ttc,date_echeance').eq('entreprise_id', state.entreprise.id).eq('statut', 'En retard'),
+    sb.from('relances').select('*, clients(nom)').eq('entreprise_id', state.entreprise.id).order('echeance', { ascending: true, nullsFirst: false }),
+    sb.from('clients').select('id,nom').eq('entreprise_id', state.entreprise.id).order('nom'),
+  ]);
+  const joursDepuis = dateStr => dateStr ? Math.round((new Date(todayISO()) - new Date(dateStr)) / 86400000) : 0;
+  const devisSansReponse = (devisList||[]).filter(d => joursDepuis(d.date) > seuilJours);
+  const relancesAFaire = (relances||[]).filter(r => r.statut === 'a_faire');
+  const relancesFaites = (relances||[]).filter(r => r.statut !== 'a_faire');
+
+  main.innerHTML = `
+    <div class="view-head"><div><h1>Relances</h1><div class="view-sub">Devis sans réponse (+ de ${seuilJours} j), factures en retard et tâches de suivi — un seul endroit pour ne rien oublier.</div></div></div>
+
+    <div class="card">
+      <h3>Devis sans réponse (${devisSansReponse.length})</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Devis</th><th>Client</th><th>Envoyé le</th><th></th></tr></thead>
+        <tbody>
+          ${devisSansReponse.length ? devisSansReponse.map(d => `
+            <tr><td>${esc(d.numero||d.numero_chantier)}</td><td>${esc(d.client_nom||'client ponctuel')}</td><td>${esc(d.date)} (${joursDepuis(d.date)} j)</td>
+            <td><button class="btn btn-ghost btn-sm goto-devis-btn" data-id="${d.id}">Ouvrir</button></td></tr>
+          `).join('') : emptyRow(4,'Aucun devis en attente de réponse.')}
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Factures en retard (${(facturesEnRetard||[]).length})</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Facture</th><th>Client</th><th class="num">Montant</th><th>Échéance</th><th></th></tr></thead>
+        <tbody>
+          ${(facturesEnRetard||[]).length ? facturesEnRetard.map(f => `
+            <tr><td>${esc(f.numero_facture)}</td><td>${esc(f.client_nom||'client ponctuel')}</td><td class="num">${money(f.montant_ttc)}</td><td>${echeancePill(f.date_echeance)}</td>
+            <td><button class="btn btn-ghost btn-sm goto-facture-btn" data-id="${f.id}">Ouvrir</button></td></tr>
+          `).join('') : emptyRow(5,'Aucune facture en retard.')}
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <div class="card-row"><h3 style="margin:0">Tâches de suivi (${relancesAFaire.length})</h3><button class="btn btn-ghost btn-sm" id="relance-libre-new">${ICONS.plus} Nouvelle tâche</button></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Tâche</th><th>Client</th><th>Échéance</th><th></th></tr></thead>
+        <tbody>
+          ${relancesAFaire.length ? relancesAFaire.map(r => `
+            <tr><td>${esc(r.titre)}</td><td>${esc(r.clients?.nom||'—')}</td><td>${r.echeance?echeancePill(r.echeance):'—'}</td>
+            <td><button class="btn btn-ghost btn-sm relance-faite-btn" data-id="${r.id}">Marquer faite</button></td></tr>
+          `).join('') : emptyRow(4,'Aucune tâche de suivi en attente.')}
+          ${relancesFaites.length ? relancesFaites.map(r => `
+            <tr style="opacity:.5"><td>${esc(r.titre)}</td><td>${esc(r.clients?.nom||'—')}</td><td>${r.echeance||'—'}</td><td><span class="pill pill-ok">Faite</span></td></tr>
+          `).join('') : ''}
+        </tbody>
+      </table></div>
+    </div>`;
+
+  document.getElementById('relance-libre-new').onclick = () => drawerRelanceLibre(main, clients);
+  main.querySelectorAll('.relance-faite-btn').forEach(btn => btn.onclick = async () => {
+    const { error } = await sb.from('relances').update({ statut: 'faite' }).eq('id', btn.dataset.id);
+    if (error) return toast('Erreur : ' + error.message);
+    viewRelances(main);
+  });
+  main.querySelectorAll('.goto-devis-btn').forEach(btn => btn.onclick = () => {
+    state.view = 'devis'; state.selectedDevisId = btn.dataset.id; state.devisView = 'list';
+    renderShell();
+  });
+  main.querySelectorAll('.goto-facture-btn').forEach(btn => btn.onclick = () => {
+    state.view = 'factures'; state.selectedFactureId = btn.dataset.id;
+    renderShell();
+  });
 }
 
 // ---------- FACTURES ----------
